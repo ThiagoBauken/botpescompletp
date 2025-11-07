@@ -1,0 +1,14 @@
+{
+  "config_test": true,
+  "server_test": true,
+  "problems": [
+    {
+      "type": "auth_http_400",
+      "severity": "high",
+      "description": "Servidor rejeitando autenticação"
+    }
+  ],
+  "solutions": [
+    "🔴 HTTP 400: Verificar license key no Keymaster"
+  ]
+}
