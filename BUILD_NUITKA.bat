@@ -66,13 +66,25 @@ echo    (compilações seguintes serão muito mais rápidas)
 echo.
 
 nuitka ^
-    --standalone ^
     --onefile ^
     --windows-disable-console ^
-    --windows-icon-from-ico=icon.ico ^
+    --windows-icon-from-ico=magoicon.ico ^
+    --company-name="FishingMageBOT" ^
+    --product-name="FishingMageBOT v5.0" ^
+    --file-version=5.0.0.0 ^
+    --product-version=5.0.0.0 ^
+    --file-description="Ultimate Fishing Bot - Protected Edition" ^
+    --copyright="Copyright 2025" ^
     --enable-plugin=tk-inter ^
+    --include-data-dir=templates=templates ^
+    --include-data-dir=locales=locales ^
+    --include-data-dir=config=config ^
     --include-data-dir=client=client ^
     --include-data-dir=ui=ui ^
+    --include-data-dir=core=core ^
+    --include-data-dir=utils=utils ^
+    --include-data-file=templates/motion.gif=templates/motion.gif ^
+    --include-data-file=magoicon.ico=magoicon.ico ^
     --include-package=PIL ^
     --include-package=cv2 ^
     --include-package=numpy ^
@@ -80,13 +92,22 @@ nuitka ^
     --include-package=keyboard ^
     --include-package=pyautogui ^
     --include-package=serial ^
-    --include-package=websocket ^
+    --include-package=websockets ^
+    --include-package=asyncio ^
+    --include-package=requests ^
     --include-package=cryptography ^
+    --include-package=certifi ^
+    --follow-imports ^
+    --nofollow-import-to=matplotlib ^
+    --nofollow-import-to=pandas ^
+    --nofollow-import-to=scipy ^
+    --nofollow-import-to=IPython ^
+    --lto=yes ^
     --output-filename=FishingMageBOT.exe ^
     %COMPILER% ^
     --assume-yes-for-downloads ^
     --show-progress ^
-    --show-memory ^
+    --remove-output ^
     main.py
 
 if %errorlevel% neq 0 (
