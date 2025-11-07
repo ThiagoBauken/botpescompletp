@@ -1,0 +1,162 @@
+{
+  "language": "en",
+  "template_confidence": {
+    "catch": 0.92,
+    "enbausi": 0.79,
+    "inventory": 0.9,
+    "carneurso": 0.75,
+    "wolfmeat": 0.75,
+    "grub": 0.75,
+    "salmon": 0.95,
+    "smalltrout": 0.8,
+    "carnecrocodilo": 0.8,
+    "comiscavara": 0.9,
+    "semiscavara": 0.86,
+    "varacomisca": 0.85,
+    "varanobauci": 0.85,
+    "namaocomisca": 0.88,
+    "comiscanamao": 0.89,
+    "varasemisca": 0.84,
+    "namaosemisca": 0.85,
+    "semiscanam": 0.93,
+    "nobauquebrada": 0.7,
+    "SALMONN": 0.91,
+    "TROUTT": 0.91,
+    "shark": 0.75,
+    "sardine": 0.75,
+    "anchovy": 0.72,
+    "yellowperch": 0.71,
+    "herring": 0.75,
+    "rawfish": 0.8,
+    "peixecru": 0.85,
+    "gruub": 0.8,
+    "carnedeurso": 0.75,
+    "carnedelobu": 0.75,
+    "crocodilo": 0.75,
+    "eat": 0.75,
+    "filefrito": 0.75,
+    "frito": 0.75,
+    "gut": 0.75,
+    "largebox": 0.7,
+    "smalltroutbox": 0.7,
+    "yellowperchbox": 0.7,
+    "wolfmeatbox": 0.7,
+    "grubbox": 0.75,
+    "scrap": 0.7,
+    "bluecard": 0.75,
+    "flare": 0.75,
+    "bullet": 0.75,
+    "BONE": 0.82,
+    "fat": 0.89,
+    "catfish": 0.75,
+    "roughy": 0.75,
+    "minhoca": 0.75,
+    "carnedelobo": 0.7,
+    "semiscavaraescura": 0.8
+  },
+  "bait_priority": {
+    "carne de urso": 2,
+    "carne de lobo": 3,
+    "trout": 4,
+    "grub": 5,
+    "worm": 6,
+    "crocodilo": 1
+  },
+  "rod_system": {
+    "rod_switch_limit": 4
+  },
+  "timeouts": {
+    "maintenance_timeout": 1
+  },
+  "auto_clean": {
+    "interval": 10,
+    "chest_method": "padrão",
+    "include_baits": true,
+    "mode": "auto_interval"
+  },
+  "performance": {
+    "clicks_per_second": 6
+  },
+  "anti_detection": {
+    "click_variation": {
+      "enabled": false
+    },
+    "s_key_cycle": {
+      "hold_duration_min": 0.5,
+      "hold_duration_max": 0.7,
+      "release_duration_min": 1.5,
+      "release_duration_max": 2.6
+    },
+    "natural_breaks": true,
+    "click_delay_range": [
+      80,
+      150
+    ],
+    "break_mode": "catches",
+    "break_catches": 50,
+    "break_minutes": 45
+  },
+  "hotkeys": {
+    "start": "f9",
+    "pause": "f2",
+    "stop": "F10",
+    "emergency": "escape",
+    "interface": "f4",
+    "macro_execute": "f8",
+    "macro_chest": "f11",
+    "macro_record": "f3",
+    "test_mouse": "f12",
+    "test_feeding": "f6",
+    "test_cleaning": "f5",
+    "test_maintenance": "page down"
+  },
+  "use_arduino": true,
+  "arduino_port": "COM13",
+  "arduino_baudrate": 115200,
+  "initial_camera_pos": {
+    "x": 960,
+    "y": 539
+  },
+  "cycle_timeout": 10,
+  "maintenance_timeout": 1,
+  "chest_side": "right",
+  "macro_type": "padrão",
+  "chest_distance": 1200,
+  "auto_reload": true,
+  "auto_focus": false,
+  "feeding_system": {
+    "enabled": true,
+    "auto_detect": true,
+    "trigger_mode": "catches",
+    "trigger_catches": 5,
+    "trigger_time": 20,
+    "session_count": 3,
+    "max_uses_per_slot": 20,
+    "feeds_per_session": 2
+  },
+  "viewer": {
+    "fps": 5,
+    "nms_threshold": 5,
+    "auto_start": true,
+    "antialiasing": true,
+    "show_slots": true
+  },
+  "bait_system": {
+    "priority": {
+      "crocodilo": 1,
+      "carneurso": 2,
+      "carnedelobo": 3,
+      "TROUTT": 4,
+      "grub": 5,
+      "minhoca": 6
+    },
+    "enabled": {
+      "crocodilo": true,
+      "carneurso": true,
+      "carnedelobo": true,
+      "TROUTT": true,
+      "grub": true,
+      "minhoca": true
+    }
+  }
+}

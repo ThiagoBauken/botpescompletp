@@ -1,0 +1,85 @@
+# Ultimate Fishing Bot v4.0 - Dependencies
+# Python 3.13+ compatível
+# Atualizado: Dezembro 2024
+
+# Computer Vision - CORE
+opencv-python==4.10.0.84     # Python 3.13 compatible
+numpy==2.1.3                 # Python 3.13 compatible
+
+# GUI Automation - CORE
+pyautogui==0.9.54
+
+# Screen Capture - CORE
+mss==9.0.2
+
+# Hotkey Detection - CORE
+keyboard==0.13.5
+
+# System Information - CORE
+psutil==6.1.0               # Python 3.13 compatible
+
+# Windows API - CORE (Windows only)
+pywin32==308                # Python 3.13 compatible
+
+# HTTP Requests - Licensing
+requests==2.32.3
+
+# Image Processing
+Pillow==11.0.0              # Python 3.13 compatible
+
+# Configuration and Data
+configparser==7.1.0         # Python 3.13 compatible
+
+# Logging (built-in, but specify for clarity)
+# logging - built-in module
+
+# Threading (built-in)
+# threading - built-in module
+
+# JSON (built-in)
+# json - built-in module
+
+# OS Operations (built-in)
+# os - built-in module
+
+# Regular Expressions (built-in)
+# re - built-in module
+
+# Time Operations (built-in)
+# time - built-in module
+
+# Datetime (built-in)
+# datetime - built-in module
+
+# Tkinter GUI (usually included with Python)
+# tkinter - usually built-in
+
+# === OPTIONAL DEPENDENCIES FOR FUTURE PHASES ===
+
+# Phase 2: Server Communication
+# websockets==11.0.3
+# fastapi==0.104.1
+# uvicorn==0.24.0
+
+# Phase 2: Database (when needed)
+# sqlalchemy==2.0.23
+# alembic==1.13.0
+
+# Phase 2: Authentication
+# pyjwt==2.8.0
+# bcrypt==4.1.1
+
+# Phase 2: Arduino Communication  
+pyserial==3.5  # ATIVADO para seleção de porta COM
+
+# Phase 3: Analytics and Monitoring
+# matplotlib==3.8.2
+# pandas==2.1.3
+
+# Phase 3: Web Dashboard
+# jinja2==3.1.2
+# flask==3.0.0
+
+# Development and Testing
+# pytest==7.4.3
+# pytest-asyncio==0.21.1

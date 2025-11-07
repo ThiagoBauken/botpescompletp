@@ -1,0 +1,200 @@
+{
+  "version": "4.0.0",
+  "language": "pt",
+  "coordinates": {
+    "monitor_offset_x": 0,
+    "monitor_offset_y": 0,
+    "inventory_area": [
+      633,
+      541,
+      1233,
+      953
+    ],
+    "chest_area": [
+      1214,
+      117,
+      1834,
+      928
+    ],
+    "inventory_chest_divider_x": 1243,
+    "slot_positions": {
+      "1": [
+        709,
+        1005
+      ],
+      "2": [
+        805,
+        1005
+      ],
+      "3": [
+        899,
+        1005
+      ],
+      "4": [
+        992,
+        1005
+      ],
+      "5": [
+        1092,
+        1005
+      ],
+      "6": [
+        1188,
+        1005
+      ]
+    },
+    "feeding_positions": {
+      "slot1": [
+        1306,
+        858
+      ],
+      "slot2": [
+        1403,
+        877
+      ],
+      "eat": [
+        1083,
+        373
+      ]
+    },
+    "screenshot_region": [
+      0,
+      0,
+      1920,
+      1080
+    ]
+  },
+  "template_confidence": {
+    "catch": 0.8,
+    "VARANOBAUCI": 0.8,
+    "enbausi": 0.7,
+    "varaquebrada": 0.7,
+    "inventory": 0.8,
+    "loot": 0.8,
+    "carneurso": 0.7,
+    "wolfmeat": 0.7,
+    "grub": 0.6,
+    "worm": 0.6,
+    "salmon": 0.7,
+    "smalltrout": 0.7
+  },
+  "bait_priority": {
+    "carne de urso": 1,
+    "carne de lobo": 2,
+    "trout": 3,
+    "grub": 4,
+    "worm": 5
+  },
+  "rod_system": {
+    "enabled": true,
+    "rod_pairs": [
+      [
+        1,
+        2
+      ],
+      [
+        3,
+        4
+      ],
+      [
+        5,
+        6
+      ]
+    ],
+    "rod_switch_limit": 20,
+    "auto_replace_broken": true,
+    "broken_rod_action": "save"
+  },
+  "timeouts": {
+    "fishing_cycle_timeout": 122,
+    "maintenance_timeout": 3
+  },
+  "feeding": {
+    "enabled": true,
+    "mode": "detecao_auto",
+    "trigger_mode": "catches",
+    "trigger_catches": 2,
+    "trigger_minutes": 20,
+    "max_uses_per_slot": 20,
+    "feeds_per_session": 5
+  },
+  "auto_clean": {
+    "enabled": true,
+    "interval": 1,
+    "chest_side": "right",
+    "chest_method": "macro",
+    "fish_selection": {
+      "salmon": true,
+      "sardine": true,
+      "anchovy": true,
+      "shark": true,
+      "yellowperch": true,
+      "herring": true,
+      "smalltrout": true,
+      "rawfish": true
+    }
+  },
+  "performance": {
+    "detection_interval_ms": 100,
+    "screenshot_optimization": true,
+    "template_caching": true,
+    "clicks_per_second": 9
+  },
+  "anti_detection": {
+    "enabled": true,
+    "click_variation": {
+      "enabled": true,
+      "min_delay": 0.08,
+      "max_delay": 0.15
+    },
+    "movement_variation": {
+      "enabled": true,
+      "a_duration_min": 1.2,
+      "a_duration_max": 1.8,
+      "d_duration_min": 1.0,
+      "d_duration_max": 1.4
+    },
+    "s_key_cycle": {
+      "enabled": true,
+      "hold_duration_min": 1.5,
+      "hold_duration_max": 2.5,
+      "release_duration_min": 1.0,
+      "release_duration_max": 2.0
+    },
+    "natural_breaks": {
+      "enabled": true,
+      "mode": "catches",
+      "catches_interval": 50,
+      "break_minutes": 45
+    }
+  },
+  "logging": {
+    "enabled": true,
+    "level": "INFO",
+    "file_rotation": true,
+    "max_log_size_mb": 10
+  },
+  "hotkeys": {
+    "start_bot": "F9",
+    "pause_resume": "F1",
+    "stop_bot": "F2",
+    "emergency_stop": "ESC",
+    "open_interface": "F4",
+    "test_macro": "F11",
+    "execute_macro": "F8"
+  },
+  "server": {
+    "enabled": false,
+    "url": "ws://localhost:8765",
+    "auto_connect": false,
+    "username": "",
+    "operating_mode": "local"
+  },
+  "arduino": {
+    "enabled": true,
+    "com_port": "COM10",
+    "baud_rate": 115200,
+    "timeout": 1,
+    "auto_connect": true
+  }
+}

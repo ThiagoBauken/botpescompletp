@@ -1,0 +1,2 @@
+# Este arquivo mantém a pasta data/ no git
+# A pasta será populada automaticamente quando o app rodar

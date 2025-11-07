@@ -1,0 +1,38 @@
+{
+  "template_confidence": {
+    "loot": 0.8,
+    "varaquebrada": 0.7,
+    "VARANOBAUCI": 0.8
+  },
+  "timeouts": {
+    "fishing_cycle_timeout": 122
+  },
+  "auto_clean": {
+    "interval": 10,
+    "enabled": true
+  },
+  "arduino_port": "COM14",
+  "feeding_system": {
+    "trigger_catches": 15
+  },
+  "rod_system": {
+    "rod_switch_limit": 20,
+    "broken_rod_action": "save"
+  },
+  "coordinates": {
+    "feeding_positions": {
+      "slot1": [
+        1306,
+        858
+      ],
+      "slot2": [
+        1403,
+        877
+      ],
+      "eat": [
+        1083,
+        373
+      ]
+    }
+  }
+}

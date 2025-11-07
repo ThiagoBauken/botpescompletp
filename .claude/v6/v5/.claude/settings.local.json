@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell:*)",
+      "Bash(dir \"C:\\Users\\Thiago\\Desktop\\HID-2.8.4\\examples\\Keyboard\" /b)",
+      "Read(//c/Users/Thiago/Desktop/HID-2.8.4/examples/Keyboard/NKROKeyboard/**)",
+      "Read(//c/Users/Thiago/Desktop/HID-2.8.4/examples/Keyboard/BootKeyboard/**)",
+      "Bash(dir \"C:\\Users\\Thiago\\Desktop\\HID-2.8.4\" /b)",
+      "Read(//c/Users/Thiago/Desktop/HID-2.8.4/**)",
+      "Bash(git --version:*)",
+      "Bash(claude mcp)",
+      "Bash(python -c \"\nimport re\n\n# Ler o log que o usuário compartilhou\nlog = ''''''\n🎯 [ARDUINO] CALIBRANDO MOUSETO:\n   📍 Posição atual do cursor: (959, 539)\n   🔄 Sincronizando MouseTo para: (959, 539)\n   📤 Comando: RESET_POS:959:539\n''''''\n\n# Procurar por comandos MOVE\ncommands = re.findall(r''📤 Comando: (MOVE[^\\n]+)'', log)\nfor cmd in commands:\n    print(f''Comando encontrado: {cmd}'')\n\")",
+      "Read(//c/Users/Thiago/Desktop/**)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(copy:*)",
+      "Bash(cat:*)",
+      "Bash(python:*)",
+      "Bash(echo:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

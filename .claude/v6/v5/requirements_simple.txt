@@ -1,0 +1,32 @@
+# Simple Fishing Bot v4.0 - Minimal Requirements
+# These are the ONLY packages needed for the clean bot
+
+# Computer Vision - Template matching
+opencv-python==4.8.1.78
+
+# Array operations for OpenCV
+numpy==1.24.3
+
+# Screen capture - Fast and efficient
+mss==9.0.1
+
+# Mouse and keyboard automation
+pyautogui==0.9.54
+
+# Hotkey detection (F9, F1, F2, ESC)
+keyboard==0.13.5
+
+# Windows-specific (required on Windows)
+pywin32==306
+
+# Installation instructions:
+# 1. Basic install:
+#    pip install -r requirements_simple.txt
+#
+# 2. If pywin32 fails on Windows:
+#    python Scripts/pywin32_postinstall.py -install
+#
+# 3. Verify installation:
+#    python test_bot.py
+#
+# That's it! Only 6 packages needed.

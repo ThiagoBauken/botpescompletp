@@ -1,0 +1,85 @@
+═══════════════════════════════════════════════════════════════
+  🛡️ SISTEMA DE DEBUG ULTRA-DETALHADO INSTALADO
+═══════════════════════════════════════════════════════════════
+
+✅ O QUE FOI FEITO:
+
+1. Criado sistema de logging CRASH-SAFE em:
+   utils/crash_safe_logger.py
+
+2. Logging adicionado em TODOS os pontos críticos:
+   ✓ InputManager (teclas, mouse, drag)
+   ✓ FeedingSystem (ALT pressionado/liberado)
+   ✓ Main.py (inicialização)
+
+3. Arquivo de log é salvo AUTOMATICAMENTE em:
+   data/logs/FULL_DEBUG_YYYY-MM-DD_HH-MM-SS.log
+
+4. O arquivo usa FLUSH IMEDIATO:
+   Mesmo se crashar ou desligar na mão, está salvo!
+
+═══════════════════════════════════════════════════════════════
+  📋 COMO USAR:
+═══════════════════════════════════════════════════════════════
+
+1. Rode o bot normalmente:
+   python main.py
+
+2. Pressione F9 e aguarde o bug acontecer
+
+3. Quando travar, DESLIGUE NA MÃO ou pressione ESC
+
+4. Depois, vá em: data/logs/
+
+5. Pegue o arquivo FULL_DEBUG mais recente
+
+6. ENVIE O ARQUIVO COMPLETO (não edite!)
+
+═══════════════════════════════════════════════════════════════
+  🔍 O QUE ESTAMOS PROCURANDO:
+═══════════════════════════════════════════════════════════════
+
+O bug acontece APÓS PEGAR UM PEIXE quando:
+- Sistema de alimentação é ativado
+- Fila de limpeza está pendente
+- Sistema de manutenção pode ser acionado
+
+SINTOMAS:
+- ALT fica pressionado
+- Cursor move para um ponto e trava
+- Sistema fica bugado/travado
+
+O LOG VAI MOSTRAR:
+- Qual tecla ficou presa (ALT, CTRL, etc)
+- Onde o drag/movimento parou
+- Qual operação não terminou corretamente
+- Stack trace completo de erros
+
+═══════════════════════════════════════════════════════════════
+  📁 ARQUIVOS MODIFICADOS:
+═══════════════════════════════════════════════════════════════
+
+NOVOS:
+- utils/crash_safe_logger.py (sistema de logging)
+- INSTRUCOES_DEBUG.md (instruções detalhadas)
+- LEIA-ME_PRIMEIRO.txt (este arquivo)
+
+MODIFICADOS:
+- main.py (logging na inicialização)
+- core/input_manager.py (logging em teclas/mouse/drag)
+- core/feeding_system.py (logging em ALT e abertura de baú)
+
+═══════════════════════════════════════════════════════════════
+  ⚡ PRÓXIMOS PASSOS:
+═══════════════════════════════════════════════════════════════
+
+1. Teste e capture o log quando o bug ocorrer
+2. Envie o arquivo FULL_DEBUG_*.log
+3. Vamos analisar e identificar a causa EXATA
+4. Corrigir o bug permanentemente!
+
+═══════════════════════════════════════════════════════════════
+
+Para instruções COMPLETAS, veja: INSTRUCOES_DEBUG.md
+
+Qualquer dúvida, estou aqui! 🚀

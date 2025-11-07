@@ -1,0 +1,11 @@
+# MACRO PADRÃO ESQUERDA
+# Movimento: DX=-1, DY=-1
+# Total de ações: 7
+
+001: {'type': 'key', 'key': 'alt_down', 'time': 0.0}
+002: {'type': 'wait', 'duration': 0.5, 'time': 0.5}
+003: {'type': 'camera_move', 'dx': -1, 'dy': -1, 'time': 1.0}
+004: {'type': 'wait', 'duration': 0.3, 'time': 1.3}
+005: {'type': 'key', 'key': 'e', 'time': 1.6}
+006: {'type': 'wait', 'duration': 0.5, 'time': 2.1}
+007: {'type': 'key', 'key': 'alt_up', 'time': 2.6}

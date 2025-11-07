@@ -1,0 +1,450 @@
+{
+  "meta": {
+    "version": "4.0.0",
+    "last_updated": "2024-12-21 15:30:00",
+    "config_type": "unified_v4",
+    "migration_source": "config_unified_migrated.json"
+  },
+  "ui_settings": {
+    "language": "pt",
+    "theme": "dark",
+    "auto_focus_enabled": false,
+    "window_geometry": "1200x800"
+  },
+  "coordinates": {
+    "inventory_area": [
+      633,
+      541,
+      1233,
+      953
+    ],
+    "chest_area": [
+      1214,
+      117,
+      1834,
+      928
+    ],
+    "inventory_chest_divider_x": 1243,
+    "slot_positions": {
+      "1": [
+        709,
+        1005
+      ],
+      "2": [
+        805,
+        1005
+      ],
+      "3": [
+        899,
+        1005
+      ],
+      "4": [
+        992,
+        1005
+      ],
+      "5": [
+        1092,
+        1005
+      ],
+      "6": [
+        1188,
+        1005
+      ]
+    },
+    "feeding_positions": {
+      "slot1": [
+        1306,
+        858
+      ],
+      "slot2": [
+        1403,
+        877
+      ],
+      "eat": [
+        1083,
+        373
+      ]
+    },
+    "camera": {
+      "initial_pos": [
+        960,
+        539
+      ],
+      "screenshot_region": [
+        0,
+        0,
+        1920,
+        1080
+      ]
+    },
+    "chest_absolute_pos": {
+      "left": {
+        "x": 0,
+        "y": 0
+      },
+      "right": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  },
+  "template_confidence": {
+    "_categories": {
+      "critical": [
+        "catch",
+        "inventory",
+        "loot"
+      ],
+      "rods_with_bait": [
+        "comiscavara",
+        "varacomisca",
+        "varanobauci",
+        "namaocomisca",
+        "comiscanamao"
+      ],
+      "rods_without_bait": [
+        "semiscavara",
+        "varasemisca",
+        "enbausi",
+        "namaosemisca",
+        "semiscanam",
+        "semiscavaraescura"
+      ],
+      "rods_broken": [
+        "varaquebrada",
+        "nobauquebrada"
+      ],
+      "fish_main": [
+        "salmon",
+        "SALMONN",
+        "smalltrout",
+        "TROUTT",
+        "shark",
+        "sardine",
+        "anchovy",
+        "yellowperch"
+      ],
+      "fish_additional": [
+        "herring",
+        "rawfish",
+        "peixecru"
+      ],
+      "baits": [
+        "wolfmeat",
+        "carneurso",
+        "carnedeurso",
+        "carnedelobu",
+        "crocodilo",
+        "grub",
+        "worm"
+      ],
+      "food": [
+        "eat",
+        "filefrito",
+        "frito",
+        "gut"
+      ],
+      "containers": [
+        "largebox",
+        "salmonbox",
+        "smalltroutbox",
+        "yellowperchbox",
+        "wolfmeatbox",
+        "grubbox",
+        "scrap"
+      ],
+      "items_other": [
+        "bluecard",
+        "flare",
+        "bullet"
+      ],
+      "items_special": [
+        "BONE",
+        "fat"
+      ]
+    },
+    "values": {
+      "catch": 0.9,
+      "inventory": 0.8,
+      "loot": 0.8,
+      "comiscavara": 0.85,
+      "varacomisca": 0.85,
+      "varanobauci": 0.8,
+      "namaocomisca": 0.85,
+      "comiscanamao": 0.8,
+      "semiscavara": 0.8,
+      "varasemisca": 0.8,
+      "enbausi": 0.7,
+      "namaosemisca": 0.85,
+      "semiscanam": 0.8,
+      "semiscavaraescura": 0.7,
+      "varaquebrada": 0.7,
+      "nobauquebrada": 0.7,
+      "SALMONN": 0.93,
+      "salmonn": 0.93,
+      "TROUTT": 0.93,
+      "troutt": 0.93,
+      "shark": 0.7,
+      "sardine": 0.7,
+      "anchovy": 0.7,
+      "yellowperch": 0.7,
+      "herring": 0.7,
+      "peixecru": 0.85,
+      "catfish": 0.74,
+      "roughy": 0.74,
+      "carneurso": 0.7,
+      "carnedelobo": 0.74,
+      "crocodilo": 0.7,
+      "grub": 0.75,
+      "minhoca": 0.74,
+      "eat": 0.8,
+      "filefrito": 0.8,
+      "frito": 0.8,
+      "gut": 0.65,
+      "largebox": 0.7,
+      "scrap": 0.65,
+      "bluecard": 0.65,
+      "flare": 0.75,
+      "bullet": 0.7,
+      "BONE": 0.7,
+      "fat": 0.8
+    }
+  },
+  "rod_system": {
+    "enabled": true,
+    "rod_pairs": [
+      [
+        1,
+        2
+      ],
+      [
+        3,
+        4
+      ],
+      [
+        5,
+        6
+      ]
+    ],
+    "initial_uses": 20,
+    "reload_uses": 10,
+    "auto_replace_broken": true,
+    "timeout_threshold": 3,
+    "pair_switch_limit": 20,
+    "broken_rod_action": "save"
+  },
+  "fishing_mechanics": {
+    "cycle_timeout": 122,
+    "clicks_per_second": 9,
+    "feed_clicks": 5,
+    "auto_reload": true,
+    "confidence_threshold": 0.8,
+    "model_path": "best.pt"
+  },
+  "feeding": {
+    "enabled": true,
+    "feeding_mode": "detecao_auto",
+    "trigger_mode": "catches",
+    "trigger_catches": 2,
+    "trigger_minutes": 20,
+    "feeds_per_session": 5,
+    "max_uses_per_slot": 20,
+    "slot_positions": {
+      "slot1": [
+        1306,
+        858
+      ],
+      "slot2": [
+        1403,
+        877
+      ]
+    },
+    "eat_position": [
+      1083,
+      373
+    ]
+  },
+  "auto_clean": {
+    "enabled": true,
+    "interval": 1,
+    "chest_side": "right",
+    "chest_distance": 1000,
+    "macro_type": "padrao",
+    "include_baits_cleanup": true,
+    "last_chest_movement": {
+      "dx": 0,
+      "dy": 0
+    }
+  },
+  "bait_system": {
+    "priority": {
+      "crocodilo": 1,
+      "carneurso": 2,
+      "carnedelobo": 3,
+      "TROUTT": 4,
+      "grub": 5,
+      "minhoca": 6
+    },
+    "enabled": {
+      "crocodilo": true,
+      "carneurso": true,
+      "carnedelobo": true,
+      "TROUTT": true,
+      "grub": true,
+      "minhoca": true
+    }
+  },
+  "anti_detection": {
+    "enabled": true,
+    "click_variation": {
+      "enabled": false,
+      "min_delay": 0.08,
+      "max_delay": 0.15
+    },
+    "movement_variation": {
+      "enabled": true,
+      "a_duration_min": 1.2,
+      "a_duration_max": 1.8,
+      "d_duration_min": 1.0,
+      "d_duration_max": 1.4
+    },
+    "natural_breaks": {
+      "enabled": true,
+      "mode": "catches",
+      "time_interval": 45,
+      "catches_interval": 50,
+      "pause_duration_min": 60,
+      "pause_duration_max": 60,
+      "last_break_time": 1758322263.1689286,
+      "catches_since_break": 0
+    }
+  },
+  "hotkeys": {
+    "start_bot": "F9",
+    "pause_resume": "F1",
+    "stop_bot": "F2",
+    "emergency_stop": "ESC",
+    "open_interface": "F4",
+    "play_macro": "F8",
+    "chest_macro": "F11",
+    "record_macro": "F3",
+    "test_mouse": "F12",
+    "test_feeding": "F6",
+    "test_clean": "F5",
+    "rod_maintenance": "page down"
+  },
+  "legacy_compatibility": {
+    "class_confidence": {
+      "anchova": 0.7,
+      "aranque": 0.7,
+      "barril aberto": 0.8,
+      "carne de lobo": 0.7,
+      "carne de urso": 0.7,
+      "cartao azul": 0.5,
+      "conforto": 0.5,
+      "cortar": 0.5,
+      "file de peixe": 0.5,
+      "flare": 0.5,
+      "gordura": 0.5,
+      "inventario aberto": 0.8,
+      "parca": 0.5,
+      "peixe capturado": 0.8,
+      "salmao": 0.7,
+      "sardinha": 0.7,
+      "scrap": 0.5,
+      "truta": 0.7,
+      "smalltrout": 0.7,
+      "tubarao": 0.7,
+      "vara": 0.8,
+      "vara com isca": 0.8
+    },
+    "original_structure": {
+      "loot_interval": 1,
+      "auto_clean_interval": 1
+    }
+  },
+  "translations": {
+    "pt_BR": {
+      "main_window": {
+        "title": "Ultimate Fishing Bot v4.0"
+      },
+      "tabs": {
+        "control": "🎮 Controle",
+        "config": "⚙️ Configurações",
+        "feeding": "🍖 Alimentação",
+        "templates": "🎯 Templates",
+        "anti_detection": "🛡️ Anti-Detecção",
+        "hotkeys": "⌨️ Hotkeys",
+        "help": "❓ Ajuda",
+        "language": "🌍 Idioma"
+      },
+      "template_categories": {
+        "critical": "🔴 CRÍTICOS",
+        "rods_with_bait": "🎣 VARAS COM ISCA",
+        "rods_without_bait": "🎣 VARAS SEM ISCA",
+        "rods_broken": "💥 VARAS QUEBRADAS",
+        "fish": "🐟 PEIXES",
+        "baits": "🥩 ISCAS/CARNES",
+        "food": "🍖 ALIMENTAÇÃO",
+        "containers": "📦 CONTAINERS",
+        "items": "💀 ITENS ESPECIAIS"
+      },
+      "buttons": {
+        "start": "🚀 Iniciar",
+        "pause": "⏸️ Pausar",
+        "stop": "🛑 Parar",
+        "emergency": "🚨 Emergência",
+        "save": "💾 Salvar",
+        "reset": "🔄 Resetar",
+        "apply": "✅ Aplicar"
+      },
+      "status": {
+        "ready": "Pronto",
+        "running": "🟢 Executando",
+        "paused": "⏸️ Pausado",
+        "stopped": "⚫ Parado"
+      }
+    },
+    "en_US": {
+      "main_window": {
+        "title": "Ultimate Fishing Bot v4.0"
+      },
+      "tabs": {
+        "control": "🎮 Control",
+        "config": "⚙️ Configuration",
+        "feeding": "🍖 Feeding",
+        "templates": "🎯 Templates",
+        "anti_detection": "🛡️ Anti-Detection",
+        "hotkeys": "⌨️ Hotkeys",
+        "help": "❓ Help",
+        "language": "🌍 Language"
+      },
+      "template_categories": {
+        "critical": "🔴 CRITICAL",
+        "rods_with_bait": "🎣 RODS WITH BAIT",
+        "rods_without_bait": "🎣 RODS WITHOUT BAIT",
+        "rods_broken": "💥 BROKEN RODS",
+        "fish": "🐟 FISH",
+        "baits": "🥩 BAITS/MEATS",
+        "food": "🍖 FOOD",
+        "containers": "📦 CONTAINERS",
+        "items": "💀 SPECIAL ITEMS"
+      },
+      "buttons": {
+        "start": "🚀 Start",
+        "pause": "⏸️ Pause",
+        "stop": "🛑 Stop",
+        "emergency": "🚨 Emergency",
+        "save": "💾 Save",
+        "reset": "🔄 Reset",
+        "apply": "✅ Apply"
+      },
+      "status": {
+        "ready": "Ready",
+        "running": "🟢 Running",
+        "paused": "⏸️ Paused",
+        "stopped": "⚫ Stopped"
+      }
+    }
+  }
+}

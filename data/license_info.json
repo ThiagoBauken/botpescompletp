@@ -1,0 +1,13 @@
+{
+  "type": "development",
+  "fingerprint": "1810509b507417d5",
+  "created": "2024-01-01",
+  "expires": "2025-12-31",
+  "features": {
+    "fishing_bot": true,
+    "template_matching": true,
+    "auto_clean": true,
+    "feeding_system": true,
+    "rod_management": true
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\Users\\Thiago\\Desktop\\v5\" /AD /B)",
+      "Bash(dir /S /B *.py)",
+      "Read(//c/**)",
+      "Bash(dir:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(if not exist \"c:\\Users\\Thiago\\Desktop\\v5\\build_tools\" mkdir \"c:\\Users\\Thiago\\Desktop\\v5\\build_tools\")",
+      "Bash(python test_security_system.py:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(findstr:*)",
+      "Bash(nul)",
+      "Bash(FishingBot.spec)",
+      "Bash(timeout /t 3)",
+      "Bash(if not exist \"c:\\Users\\Thiago\\Desktop\\v5\\BUILD_EXE.bat\" echo.)",
+      "Bash(if not exist \"c:\\Users\\Thiago\\Desktop\\v5\\START_HIDDEN.vbs\" echo.)",
+      "Bash(xcopy:*)",
+      "Bash(copy \"c:\\Users\\Thiago\\Desktop\\v5\\main.py\" \"c:\\Users\\Thiago\\Desktop\\v5_build_clean\\main.py\")",
+      "Bash(copy:*)",
+      "Bash(find:*)",
+      "Bash(where:*)",
+      "Bash(cd:*)",
+      "Bash(pip show:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
