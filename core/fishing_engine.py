@@ -183,8 +183,13 @@ class FishingEngine:
         try:
             import sys
             import os
-            # Adicionar diretório client ao path
-            client_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'client')
+            # ✅ Adicionar diretório client ao path (funciona em .exe)
+            if getattr(sys, 'frozen', False):
+                base_dir = os.path.dirname(sys.executable)
+            else:
+                base_dir = os.path.dirname(os.path.dirname(__file__))
+
+            client_path = os.path.join(base_dir, 'client')
             if client_path not in sys.path:
                 sys.path.insert(0, client_path)
 
@@ -437,21 +442,69 @@ class FishingEngine:
             if not self.is_running:
                 _safe_print("⚠️ Sistema de pesca não está rodando")
                 return False
-            
+
             self.is_paused = not self.is_paused
-            
+
             if self.is_paused:
                 _safe_print("⏸️ Sistema de pesca pausado")
                 self.change_state(FishingState.PAUSED)
             else:
                 _safe_print("▶️ Sistema de pesca despausado")
                 self.change_state(FishingState.FISHING)
-            
-            return True
-            
+
+    def on_server_connection_lost(self):
+        """
+        ✅ NOVO: Callback chamado quando conexão WebSocket é perdida
+
+        AÇÕES:
+        1. Pausa bot automaticamente
+        2. Mostra popup de aviso (se UI disponível)
+        3. Aguarda usuário reconectar e pressionar F9
+
+        Chamado por: WebSocketClient.on_connection_lost_callback
+        """
+        _safe_print("\n" + "=" * 70)
+        _safe_print("🛑 SERVIDOR DESCONECTADO - BOT PAUSADO AUTOMATICAMENTE")
+        _safe_print("=" * 70)
+
+        # Pausar bot (força pausa, não toggle)
+        if self.is_running and not self.is_paused:
+            self.is_paused = True
+            self.change_state(FishingState.PAUSED)
+            _safe_print("⏸️ Bot pausado devido à perda de conexão")
+
+        # Mostrar popup de aviso (se UI disponível)
+        try:
+            # Verificar se tem referência para UI (main_window)
+            if hasattr(self, 'ui_callback') and self.ui_callback:
+                # Chamar callback da UI para mostrar popup
+                self.ui_callback('show_connection_lost_dialog')
+            else:
+                # Tentar importar diretamente (fallback)
+                try:
+                    from tkinter import messagebox
+                    messagebox.showwarning(
+                        "Servidor Desconectado",
+                        "Conexão com servidor foi perdida!\n\n"
+                        "O bot foi pausado automaticamente.\n\n"
+                        "Passos para retomar:\n"
+                        "1. Verifique sua conexão de internet\n"
+                        "2. Aguarde alguns segundos\n"
+                        "3. Pressione F9 para retomar\n\n"
+                        "O servidor tentará reconectar automaticamente."
+                    )
+                except:
+                    # Se não conseguir mostrar popup, só logar
+                    pass
         except Exception as e:
-            _safe_print(f"❌ Erro ao pausar/despausar: {e}")
-            return False
+            _safe_print(f"⚠️ Não foi possível mostrar popup: {e}")
+
+        _safe_print("")
+        _safe_print("💡 Para retomar a pesca:")
+        _safe_print("   1. Verifique sua conexão de internet")
+        _safe_print("   2. Aguarde o servidor reconectar")
+        _safe_print("   3. Pressione F9 para continuar")
+        _safe_print("=" * 70)
     
     def _fishing_loop(self):
         """

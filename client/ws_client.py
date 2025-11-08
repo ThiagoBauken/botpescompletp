@@ -65,6 +65,12 @@ class WebSocketClient:
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 5
 
+        # ✅ NOVO: Auto-stop quando conexão perdida
+        self.auto_stop_enabled = True
+        self.max_reconnect_time = 10  # segundos
+        self.reconnect_start_time = None
+        self.on_connection_lost_callback = None
+
         # Arduino Command Executor (para comandos genéricos do servidor)
         self.arduino_executor = None
 
@@ -81,6 +87,23 @@ class WebSocketClient:
         with self.lock:
             self.callbacks[command] = callback
             logger.info(f"📝 Callback registrado para comando: {command}")
+
+    def register_connection_lost_callback(self, callback: Callable):
+        """
+        Registrar callback para quando conexão é perdida por muito tempo
+
+        O callback será chamado se o WebSocket não conseguir reconectar
+        dentro de max_reconnect_time segundos.
+
+        Args:
+            callback: Função a ser chamada (tipicamente para pausar o bot)
+
+        Exemplo:
+            ws_client.register_connection_lost_callback(fishing_engine.on_server_connection_lost)
+        """
+        self.on_connection_lost_callback = callback
+        _safe_print(f"🛡️  Auto-stop configurado (timeout: {self.max_reconnect_time}s)")
+        logger.info(f"Auto-stop callback registrado (timeout: {self.max_reconnect_time}s)")
 
     def connect(self, email: str, token: str) -> bool:
         """
@@ -511,9 +534,39 @@ class WebSocketClient:
                 if self.running:
                     self.reconnect_attempts += 1
 
+                    # ✅ NOVO: Iniciar timer de auto-stop na primeira falha
+                    if self.reconnect_attempts == 1:
+                        self.reconnect_start_time = time.time()
+                        _safe_print(f"⏱️  Iniciando timer de auto-stop ({self.max_reconnect_time}s)")
+
+                    # Calcular tempo decorrido tentando reconectar
+                    if self.reconnect_start_time:
+                        elapsed_time = time.time() - self.reconnect_start_time
+
+                        # ✅ NOVO: Auto-stop se passou do tempo limite
+                        if elapsed_time > self.max_reconnect_time:
+                            _safe_print("\n" + "=" * 70)
+                            _safe_print("🛑 CONEXÃO PERDIDA POR MUITO TEMPO")
+                            _safe_print("=" * 70)
+                            _safe_print(f"   Tempo tentando reconectar: {elapsed_time:.0f}s")
+                            _safe_print(f"   Limite configurado: {self.max_reconnect_time}s")
+                            _safe_print(f"   🚨 Bot será pausado automaticamente!")
+                            _safe_print("=" * 70)
+
+                            # Chamar callback para pausar bot
+                            if self.on_connection_lost_callback:
+                                try:
+                                    self.on_connection_lost_callback()
+                                except Exception as callback_error:
+                                    logger.error(f"Erro no callback de connection lost: {callback_error}")
+
+                            self.running = False
+                            break
+
+                    # Continuar tentando reconectar (com intervalo fixo de 2s)
                     if self.reconnect_attempts < self.max_reconnect_attempts:
-                        wait_time = min(5 * self.reconnect_attempts, 30)
-                        _safe_print(f"🔄 Reconectando em {wait_time}s... (tentativa {self.reconnect_attempts}/{self.max_reconnect_attempts})")
+                        wait_time = 2  # Fixo: 2 segundos entre tentativas
+                        _safe_print(f"🔄 Reconectando em {wait_time}s... (tentativa {self.reconnect_attempts}/{self.max_reconnect_attempts}, tempo: {elapsed_time:.0f}s/{self.max_reconnect_time}s)")
                         await asyncio.sleep(wait_time)
                     else:
                         _safe_print(f"❌ Máximo de tentativas de reconexão atingido")

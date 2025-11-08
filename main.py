@@ -364,6 +364,13 @@ def main():
                 try:
                     register_server_callbacks(ws_client, ui.fishing_engine)
                     safe_print("✅ Callbacks do servidor registrados!")
+
+                    # ✅ NOVO: Registrar callback de auto-stop quando conexão é perdida
+                    ws_client.register_connection_lost_callback(
+                        ui.fishing_engine.on_server_connection_lost
+                    )
+                    safe_print("🛡️  Auto-stop ativado (pausa bot se servidor ficar offline > 10s)")
+
                 except Exception as e:
                     safe_print(f"⚠️ Erro ao registrar callbacks: {e}")
 
