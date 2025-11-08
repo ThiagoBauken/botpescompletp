@@ -452,6 +452,12 @@ class FishingEngine:
                 _safe_print("▶️ Sistema de pesca despausado")
                 self.change_state(FishingState.FISHING)
 
+            return True
+
+        except Exception as e:
+            _safe_print(f"❌ Erro ao pausar/despausar: {e}")
+            return False
+
     def on_server_connection_lost(self):
         """
         ✅ NOVO: Callback chamado quando conexão WebSocket é perdida
