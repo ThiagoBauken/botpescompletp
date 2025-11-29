@@ -17,7 +17,7 @@ def main():
     # TESTE 1: Imports
     print("\n[1/5] Testando imports...")
     try:
-        from ui.unified_auth_dialog import UnifiedAuthDialog
+        from ui.auth_dialog import AuthDialog
         from utils.license_manager import LicenseManager
         from client.ws_client import WebSocketClient
         print("OK - Todos os imports funcionam")
@@ -25,46 +25,46 @@ def main():
         errors.append(f"ERRO imports: {e}")
         print(f"FALHOU: {e}")
 
-    # TESTE 2: UnifiedAuthDialog tem logica correta
-    print("\n[2/5] Verificando UnifiedAuthDialog...")
+    # TESTE 2: AuthDialog tem logica correta
+    print("\n[2/5] Verificando AuthDialog...")
     try:
-        with open("ui/unified_auth_dialog.py", "r", encoding="utf-8") as f:
+        with open("ui/auth_dialog.py", "r", encoding="utf-8") as f:
             content = f.read()
 
         checks = [
-            ("saved_key = self.license_manager.load_license()", "Carrega license salva"),
-            ("if saved_key == license_key:", "Compara keys"),
-            ("validate_license(license_key)", "Chama validate"),
-            ("activate_license(license_key)", "Chama activate")
+            ('endpoint = f"{server_url}/auth/activate"', "Endpoint correto (/auth/activate)"),
+            ("'login': username", "Payload usa 'login'"),
+            ("handle_reset_password", "Tem recuperacao de senha"),
+            ("recovery_license_entry", "Recovery usa license_key")
         ]
 
         for code, desc in checks:
             if code in content:
                 print(f"  OK - {desc}")
             else:
-                errors.append(f"UnifiedAuthDialog: Falta {desc}")
+                errors.append(f"AuthDialog: Falta {desc}")
                 print(f"  FALHOU - {desc}")
     except Exception as e:
-        errors.append(f"ERRO UnifiedAuthDialog: {e}")
+        errors.append(f"ERRO AuthDialog: {e}")
         print(f"FALHOU: {e}")
 
-    # TESTE 3: main.py usa UnifiedAuthDialog
+    # TESTE 3: main.py usa AuthDialog
     print("\n[3/5] Verificando main.py...")
     try:
         with open("main.py", "r", encoding="utf-8") as f:
             content = f.read()
 
-        if "from ui.unified_auth_dialog import UnifiedAuthDialog" in content:
-            print("  OK - Importa UnifiedAuthDialog")
+        if "from ui.auth_dialog import AuthDialog" in content:
+            print("  OK - Importa AuthDialog")
         else:
-            errors.append("main.py: NAO importa UnifiedAuthDialog")
-            print("  FALHOU - NAO importa UnifiedAuthDialog")
+            errors.append("main.py: NAO importa AuthDialog")
+            print("  FALHOU - NAO importa AuthDialog")
 
-        if "UnifiedAuthDialog(license_manager)" in content:
-            print("  OK - Usa UnifiedAuthDialog")
+        if "AuthDialog(license_manager, cred_manager)" in content:
+            print("  OK - Usa AuthDialog")
         else:
-            errors.append("main.py: NAO usa UnifiedAuthDialog")
-            print("  FALHOU - NAO usa UnifiedAuthDialog")
+            errors.append("main.py: NAO usa AuthDialog")
+            print("  FALHOU - NAO usa AuthDialog")
     except Exception as e:
         errors.append(f"ERRO main.py: {e}")
         print(f"FALHOU: {e}")
@@ -121,9 +121,11 @@ def main():
         print("\nOK - TODOS OS TESTES PASSARAM!")
         print("PODE COMPILAR COM SEGURANCA!")
         print("\nCHECKLIST:")
-        print("  [OK] UnifiedAuthDialog com logica ativar vs validar")
-        print("  [OK] main.py usa UnifiedAuthDialog")
+        print("  [OK] AuthDialog corrigido (usa /auth/activate)")
+        print("  [OK] main.py usa AuthDialog")
         print("  [OK] Servidor tem todos os endpoints")
+        print("  [OK] Recovery usa license_key + HWID")
+        print("  [OK] Admin panel tem stats de pesca")
         return 0
     else:
         print(f"\nFALHOU - {len(errors)} erro(s) encontrado(s):")
