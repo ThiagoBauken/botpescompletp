@@ -1188,7 +1188,8 @@ class AuthDialog:
                     # Erro
                     try:
                         error_data = response.json()
-                        error_msg = error_data.get('message', f'Erro HTTP {response.status_code}')
+                        # ✅ FastAPI usa 'detail', mas aceitar 'message' também
+                        error_msg = error_data.get('detail') or error_data.get('message', f'Erro HTTP {response.status_code}')
                     except:
                         error_msg = f'Erro HTTP {response.status_code}'
 
