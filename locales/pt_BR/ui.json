@@ -495,6 +495,8 @@
     "configurações_do_baú": "📦 Configurações do Baú",
     "lado_do_baú": "Lado do Baú:",
     "tipo_de_macro": "Tipo de Macro:",
+    "macro_type_default": "Padrão",
+    "macro_type_custom": "Personalizado",
     "distância_baú_px": "Distância Baú (px):",
     "opções_adicionais": "🔧 Opções Adicionais",
     "auto_reload": "Auto Reload",
@@ -528,6 +530,7 @@
     "valor": "Valor",
     "confiança_05_flexível": "Confiança (0.5 = Flexível → 0.9 = Preciso)",
     "ajuste_fino": "Ajuste Fino",
+    "minus_1": "-1%",
     "1": "+1%",
     "atalhos_rápidos": "🎯 Atalhos Rápidos:",
     "aplicar_padrão": "🔄 Aplicar Padrão",
@@ -704,6 +707,7 @@
     "help_instruction_3": "3. Configure a alimentação se necessário",
     "help_instruction_4": "4. Use as teclas de atalho para controlar o bot",
     "help_instruction_5": "5. Monitore as estatísticas na aba Controle",
+    "help_important_note": "⚠️ IMPORTANTE: Ao pausar ou parar o bot, ao voltar a pescar sempre inicie com a vara do SLOT 1",
     "help_trouble_1": "• Bot não detecta peixes: Ajuste confiança dos templates",
     "help_trouble_2": "• Coordenadas erradas: Use ferramenta de captura",
     "help_trouble_3": "• Bot muito lento: Reduza intervalo de detecção",
@@ -720,5 +724,113 @@
     "hotkey_test_feeding": "Testar Alimentação",
     "hotkey_test_cleaning": "Testar Limpeza",
     "arduino_info_text": "🔌 Arduino Leonardo - Interface de Hardware\n\n• 🖱️ Controle direto do mouse (clicks, movimento)\n• ⌨️ Simulação de teclas (E, Alt, etc.)\n• 🎣 Comandos específicos para pesca\n• 📡 Comunicação via porta COM (USB)\n• ⚡ Baixa latência para ações críticas\n\n⚠️ Certifique-se de que o Arduino esteja programado com o firmware correto\n📋 Verifique a porta COM no Gerenciador de Dispositivos do Windows"
+  },
+  "stats_ranking": {
+    "your_statistics": "📊 Suas Estatísticas",
+    "user": "👤 Usuário:",
+    "loading": "Carregando...",
+    "total_fished": "🐟 Total Pescado:",
+    "fish_count": "{count} peixes",
+    "this_month": "📅 Este Mês:",
+    "your_rankings": "🏆 Seus Rankings:",
+    "monthly": "Mensal:",
+    "overall": "Geral:",
+    "rank_format": "#{rank}",
+    "top5_monthly": "🏅 TOP 5 - Este Mês",
+    "top5_alltime": "🏆 TOP 5 - Todos os Tempos",
+    "refresh_stats": "🔄 Atualizar Estatísticas",
+    "error_loading": "Erro ao carregar",
+    "timeout": "Timeout",
+    "na": "N/A",
+    "not_authenticated": "Não autenticado"
+  },
+  "two_rod_mode": {
+    "title": "🎣 Modo 2 Varas (Slots 1 e 2 apenas)",
+    "enable": "Ativar Modo 2 Varas",
+    "description": "Quando ativado, o bot usa APENAS os slots 1 e 2.\n• Não troca para pares 3,4 ou 5,6\n• Manutenção só coloca varas/iscas nos slots 1 e 2\n• Slots 3,4,5,6 são ignorados completamente",
+    "description_line1": "Quando ativado, o bot usa APENAS os slots 1 e 2.",
+    "description_line2": "• Não troca para pares 3,4 ou 5,6",
+    "description_line3": "• Manutenção só coloca varas/iscas nos slots 1 e 2",
+    "description_line4": "• Slots 3,4,5,6 são ignorados completamente"
+  },
+  "bait_priority": {
+    "move_up": "🔺",
+    "move_down": "🔻"
+  },
+  "tab_visibility": {
+    "title": "👁️ Visibilidade de Abas",
+    "description": "💡 Desmarque para ocultar abas que você não usa frequentemente"
+  },
+  "community": {
+    "title": "🌐 Comunidade & Suporte",
+    "discord_label": "💬 Discord:"
+  },
+  "common": {
+    "success": "Sucesso",
+    "error": "Erro",
+    "save_failed": "Falha ao salvar configurações",
+    "save_error": "Erro ao salvar: {error}",
+    "default": "padrão"
+  },
+  "save_messages": {
+    "anti_detection_saved": "Configurações de anti-detecção salvas!",
+    "priorities_save_failed": "Falha ao salvar prioridades",
+    "hotkeys_save_failed": "Falha ao salvar hotkeys no disco",
+    "hotkeys_error_saving": "❌ Erro ao salvar hotkeys"
+  },
+  "chest_options": {
+    "left": "Esquerdo",
+    "right": "Direito"
+  },
+  "license": {
+    "expired_closing": "⚠️ Licença Expirada - Fechando..."
+  },
+  "auth_dialog": {
+    "title": "🔐 Ultimate Fishing Bot v5.0 - Autenticação",
+    "subtitle": "Sistema de Autenticação Seguro",
+    "hardware_id": "🆔 Hardware ID",
+    "tab_login": "🔑 Login",
+    "tab_register": "📝 Cadastro",
+    "tab_recovery": "🔄 Recuperar Senha",
+    "footer_encrypted": "🔒 Suas credenciais são criptografadas localmente",
+    "login_title": "🔑 Login",
+    "login_description": "Entre com suas credenciais para acessar o bot.",
+    "login_email_label": "📧 Email ou Username:",
+    "login_password_label": "🔒 Senha:",
+    "login_license_label": "🔑 License Key:",
+    "login_remember": "✅ Manter conectado",
+    "login_button": "🚀 Entrar",
+    "register_title": "📝 Cadastro",
+    "register_description": "Primeira ativação? Crie sua conta aqui.",
+    "register_username_label": "👤 Username (login):",
+    "register_email_label": "📧 Email (opcional - para recuperação de senha):",
+    "register_password_label": "🔒 Senha (mínimo 6 caracteres):",
+    "register_confirm_label": "🔒 Confirmar Senha:",
+    "register_license_label": "🔑 License Key:",
+    "register_button": "✨ Criar Conta e Ativar",
+    "recovery_title": "🔄 Recuperar Senha",
+    "recovery_description": "Digite seu email ou license key para receber\no código de recuperação.",
+    "recovery_identifier_label": "📧 Email ou License Key:",
+    "recovery_request_button": "📤 Solicitar Código de Recuperação",
+    "recovery_separator": "─",
+    "recovery_code_label": "🔢 Código de Recuperação (recebido por email):",
+    "recovery_new_password_label": "🔒 Nova Senha (mínimo 6 caracteres):",
+    "recovery_confirm_password_label": "🔒 Confirmar Nova Senha:",
+    "recovery_reset_button": "🔄 Resetar Senha",
+    "status_authenticating": "🔄 Autenticando...",
+    "status_registering": "🔄 Criando conta...",
+    "status_requesting_code": "📤 Solicitando código...",
+    "status_resetting_password": "🔄 Resetando senha...",
+    "error_fill_all_fields": "⚠️ Atenção\n\nPreencha Login, Senha e License Key!",
+    "error_password_min_length": "⚠️ Atenção\n\nSenha deve ter no mínimo 6 caracteres!",
+    "error_password_mismatch": "❌ Erro\n\nAs senhas não coincidem!",
+    "error_invalid_email": "⚠️ Atenção\n\nEmail inválido!",
+    "error_invalid_username": "⚠️ Atenção\n\nUsername deve ter 3-20 caracteres (letras, números, _ ou -)",
+    "error_connection": "❌ Erro de Conexão\n\nNão foi possível conectar ao servidor",
+    "error_timeout": "⏰ Timeout\n\nServidor demorou para responder",
+    "success_registered": "✅ Sucesso\n\nConta criada com sucesso!",
+    "success_logged_in": "✅ Sucesso\n\nLogin realizado com sucesso!",
+    "success_code_sent": "✅ Código Enviado\n\nCódigo de recuperação enviado!\nVerifique seu email.",
+    "success_password_reset": "✅ Senha Resetada\n\nSenha resetada com sucesso!\nFaça login com a nova senha."
   }
 }
