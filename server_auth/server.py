@@ -688,6 +688,40 @@ class FishingSession:
         except Exception as e:
             logger.error(f"❌ {self.login}: Erro ao salvar fish_count no banco: {e}")
 
+    def stop_fishing(self):
+        """
+        🛑 Parar fishing - RESETA VARA PARA SLOT 1
+
+        Chamado quando cliente para o bot (F2 ou stop button).
+        SEMPRE reseta para vara 1 para evitar dessincronização.
+        """
+        with self.lock:
+            logger.info(f"🛑 {self.login}: Bot parado - resetando sistema de varas")
+
+            # ✅ RESET: Sempre voltar para PAR 1, VARA 1 (slot absoluto 1)
+            # Evita dessincronização quando usuário para e troca vara manualmente
+            self.current_pair_index = 0  # Volta pro par 1
+            self.current_rod = 1         # Volta pra vara 1 (slot absoluto)
+
+            logger.info(f"   ✅ Sistema resetado - próximo início será SEMPRE na vara 1 (slot absoluto)")
+
+    def pause_fishing(self):
+        """
+        ⏸️ Pausar fishing - RESETA VARA PARA SLOT 1
+
+        Chamado quando cliente pausa o bot (F1).
+        SEMPRE reseta para vara 1 para evitar dessincronização.
+        """
+        with self.lock:
+            logger.info(f"⏸️ {self.login}: Bot pausado - resetando sistema de varas")
+
+            # ✅ RESET: Sempre voltar para PAR 1, VARA 1 (slot absoluto 1)
+            # Evita dessincronização quando usuário pausa e troca vara manualmente
+            self.current_pair_index = 0  # Volta pro par 1
+            self.current_rod = 1         # Volta pra vara 1 (slot absoluto)
+
+            logger.info(f"   ✅ Sistema resetado - ao despausar começará SEMPRE na vara 1 (slot absoluto)")
+
     def cleanup(self):
         """
         ✅ CORREÇÃO #3: Cleanup de recursos ao desconectar
@@ -701,6 +735,11 @@ class FishingSession:
             logger.info(f"   Peixes capturados: {self.fish_count}")
             logger.info(f"   Timeouts totais: {self.total_timeouts}")
             logger.info(f"   Vara atual: {self.current_rod}")
+
+            # ✅ RESET: Resetar vara para slot 1 no cleanup também
+            self.current_pair_index = 0
+            self.current_rod = 1
+            logger.info(f"   ✅ Vara resetada para slot 1 no cleanup")
 
             # Limpar referências (opcional, mas boa prática)
             self.user_config.clear()
@@ -1443,6 +1482,20 @@ async def websocket_endpoint(websocket: WebSocket):
             # ─────────────────────────────────────────────────
             elif event == "cleaning_done":
                 logger.info(f"✅ {login}: Limpeza concluída")
+
+            # ─────────────────────────────────────────────────
+            # ✅ NOVO: EVENTO: Bot parado (F2 ou stop button)
+            # ─────────────────────────────────────────────────
+            elif event == "fishing_stopped":
+                logger.info(f"🛑 {login}: Cliente parou o bot")
+                session.stop_fishing()  # Reseta vara para slot 1
+
+            # ─────────────────────────────────────────────────
+            # ✅ NOVO: EVENTO: Bot pausado (F1)
+            # ─────────────────────────────────────────────────
+            elif event == "fishing_paused":
+                logger.info(f"⏸️ {login}: Cliente pausou o bot")
+                session.pause_fishing()  # Reseta vara para slot 1
 
             # ─────────────────────────────────────────────────
             # PING (heartbeat)
