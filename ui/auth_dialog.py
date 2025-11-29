@@ -768,7 +768,7 @@ class AuthDialog:
         # Instruções
         tk.Label(
             frame,
-            text=_('auth_dialog.recovery_title') if I18N_AVAILABLE else "🔄 Recuperar Senha",
+            text="🔄 Recuperar Senha",
             font=('Arial', 12, 'bold'),
             fg='#0078d7',
             bg='#2d2d2d'
@@ -776,23 +776,24 @@ class AuthDialog:
 
         tk.Label(
             frame,
-            text=_('auth_dialog.recovery_description') if I18N_AVAILABLE else "Digite seu email ou license key para receber\no código de recuperação.",
+            text="Reset de senha no mesmo PC onde ativou a licença.\nO sistema valida automaticamente seu hardware.",
             font=('Arial', 10),
             fg='#aaaaaa',
             bg='#2d2d2d',
-            justify='left'
+            justify='left',
+            wraplength=500
         ).pack(anchor='w', pady=(0, 25))
 
-        # Email ou License Key
+        # License Key
         tk.Label(
             frame,
-            text=_('auth_dialog.recovery_identifier_label') if I18N_AVAILABLE else "📧 Email ou License Key:",
+            text="🔑 License Key:",
             font=('Arial', 10, 'bold'),
             fg='#ffffff',
             bg='#2d2d2d'
         ).pack(anchor='w', pady=(0, 5))
 
-        self.recovery_identifier_entry = tk.Entry(
+        self.recovery_license_entry = tk.Entry(
             frame,
             font=('Arial', 11),
             bg='#404040',
@@ -801,56 +802,7 @@ class AuthDialog:
             relief='flat',
             bd=5
         )
-        self.recovery_identifier_entry.pack(fill='x', pady=(0, 15))
-
-        # Botão Solicitar Código
-        tk.Button(
-            frame,
-            text=_('auth_dialog.recovery_request_button') if I18N_AVAILABLE else "📤 Solicitar Código de Recuperação",
-            font=('Arial', 11, 'bold'),
-            bg='#ffc107',
-            fg='black',
-            relief='flat',
-            padx=20,
-            pady=10,
-            cursor='hand2',
-            command=self.handle_request_recovery
-        ).pack(fill='x', pady=(0, 30))
-
-        # Separador
-        separator_frame = tk.Frame(frame, bg='#2d2d2d', height=2)
-        separator_frame.pack(fill='x', pady=(10, 25))
-
-        tk.Frame(separator_frame, bg='#555555', height=1).pack(fill='x')
-
-        # Seção: Já tem o código?
-        tk.Label(
-            frame,
-            text="✉️ Já recebeu o código?" if I18N_AVAILABLE else "✉️ Já recebeu o código?",
-            font=('Arial', 11, 'bold'),
-            fg='#0078d7',
-            bg='#2d2d2d'
-        ).pack(anchor='w', pady=(0, 20))
-
-        # Código de Recuperação
-        tk.Label(
-            frame,
-            text=_('auth_dialog.recovery_code_label') if I18N_AVAILABLE else "🔢 Código de Recuperação (recebido por email):",
-            font=('Arial', 10, 'bold'),
-            fg='#ffffff',
-            bg='#2d2d2d'
-        ).pack(anchor='w', pady=(0, 5))
-
-        self.recovery_code_entry = tk.Entry(
-            frame,
-            font=('Courier New', 12, 'bold'),
-            bg='#404040',
-            fg='#ffd700',
-            insertbackground='#ffd700',
-            relief='flat',
-            bd=5
-        )
-        self.recovery_code_entry.pack(fill='x', pady=(0, 20))
+        self.recovery_license_entry.pack(fill='x', pady=(0, 20))
 
         # Nova Senha
         tk.Label(
@@ -1096,12 +1048,12 @@ class AuthDialog:
         )
 
     def handle_reset_password(self):
-        """Resetar senha com código"""
-        code = self.recovery_code_entry.get().strip()
+        """Resetar senha com license key + HWID (auto-validação)"""
+        license_key = self.recovery_license_entry.get().strip()
         new_password = self.recovery_new_password_entry.get().strip()
 
-        if not code or not new_password:
-            self._show_warning("⚠️ Atenção", "Preencha o código e a nova senha!")
+        if not license_key or not new_password:
+            self._show_warning("⚠️ Atenção", "Preencha a license key e a nova senha!")
             return
 
         if len(new_password) < 6:
@@ -1118,22 +1070,33 @@ class AuthDialog:
         def reset_thread():
             try:
                 import requests
+
+                # Capturar HWID
+                hwid = self.license_manager.get_hardware_id()
+                pc_name = platform.node()
+
                 # ✅ PRODUÇÃO: Servidor de autenticação
                 server_url = os.getenv('AUTH_SERVER_URL', 'https://private-serverpesca.pbzgje.easypanel.host')
 
                 response = requests.post(
                     f"{server_url}/auth/reset-password",
                     json={
-                        'code': code,
+                        'license_key': license_key,
+                        'hwid': hwid,
                         'new_password': new_password
                     },
                     timeout=10
                 )
 
                 if response.status_code == 200:
-                    self.root.after(0, lambda: self.handle_reset_success())
+                    data = response.json()
+                    login = data.get('login', 'usuário')
+                    self.root.after(0, lambda: self.handle_reset_success(login))
                 else:
-                    error = response.json().get('message', 'Erro desconhecido')
+                    try:
+                        error = response.json().get('detail', 'Erro desconhecido')
+                    except:
+                        error = f'Erro HTTP {response.status_code}'
                     self.root.after(0, lambda: self.handle_reset_error(error))
 
             except Exception as e:
@@ -1141,15 +1104,15 @@ class AuthDialog:
 
         threading.Thread(target=reset_thread, daemon=True).start()
 
-    def handle_reset_success(self):
+    def handle_reset_success(self, login):
         """Senha resetada com sucesso"""
         self.status_label.config(
-            text="✅ Senha resetada! Faça login novamente.",
+            text=f"✅ Senha resetada para '{login}'!",
             fg='#28a745'
         )
         self._show_info(
             "✅ Sucesso",
-            "Senha resetada com sucesso!\n\nFaça login na aba 'Login'."
+            f"Senha resetada com sucesso para '{login}'!\n\nFaça login na aba 'Login'."
         )
         # Mudar para aba de login
         self.notebook.select(self.login_tab)
