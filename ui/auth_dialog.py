@@ -12,6 +12,8 @@ import os
 import sys
 import re
 import traceback
+import random
+import string
 
 # Importar sistema i18n
 try:
@@ -74,6 +76,13 @@ class AuthDialog:
     3. RECUPERAÇÃO: Resetar senha via email/código
     """
 
+    @staticmethod
+    def _generate_random_title():
+        """Gera um título aleatório com 8-12 caracteres"""
+        length = random.randint(8, 12)
+        chars = string.ascii_letters + string.digits
+        return ''.join(random.choice(chars) for _ in range(length))
+
     def __init__(self, license_manager, credential_manager):
         self.license_manager = license_manager
         self.credential_manager = credential_manager
@@ -88,10 +97,177 @@ class AuthDialog:
         # ✅ Armazenar referências de widgets para atualização de idioma
         self.ui_elements = {}
 
+    # ═══════════════════════════════════════════════════════
+    # DIALOGS CUSTOMIZADOS COM ÍCONE
+    # ═══════════════════════════════════════════════════════
+
+    def _custom_dialog(self, title, message, dialog_type="info", buttons="ok"):
+        """
+        Dialog customizado com ícone correto
+
+        Args:
+            title: Título do dialog
+            message: Mensagem
+            dialog_type: 'info', 'warning', 'error'
+            buttons: 'ok', 'yesno'
+
+        Returns:
+            True/False para 'yesno', None para 'ok'
+        """
+        dialog = tk.Toplevel(self.root if self.root else None)
+        dialog.title(title)
+        dialog.geometry("450x200")
+        dialog.configure(bg='#2d2d2d')
+        dialog.resizable(False, False)
+        if self.root:
+            dialog.transient(self.root)
+        dialog.grab_set()
+
+        # ✅ Aplicar ícone customizado
+        try:
+            icon_path = resource_path("magoicon.ico")
+            if os.path.exists(icon_path):
+                dialog.iconbitmap(icon_path)
+        except:
+            pass
+
+        # Centralizar
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f'+{x}+{y}')
+
+        result = {'value': None}
+
+        # Frame principal
+        frame = tk.Frame(dialog, bg='#2d2d2d', padx=25, pady=20)
+        frame.pack(fill='both', expand=True)
+
+        # Ícone e cor baseado no tipo
+        icon_map = {
+            'info': ('ℹ️', '#0078d7'),
+            'warning': ('⚠️', '#ffc107'),
+            'error': ('❌', '#dc3545')
+        }
+        icon, color = icon_map.get(dialog_type, icon_map['info'])
+
+        # Header com ícone
+        header_frame = tk.Frame(frame, bg='#2d2d2d')
+        header_frame.pack(fill='x', pady=(0, 15))
+
+        tk.Label(
+            header_frame,
+            text=icon,
+            font=('Arial', 24),
+            fg=color,
+            bg='#2d2d2d'
+        ).pack(side='left', padx=(0, 10))
+
+        tk.Label(
+            header_frame,
+            text=title,
+            font=('Arial', 12, 'bold'),
+            fg='#ffffff',
+            bg='#2d2d2d'
+        ).pack(side='left')
+
+        # Mensagem
+        tk.Label(
+            frame,
+            text=message,
+            font=('Arial', 10),
+            fg='#cccccc',
+            bg='#2d2d2d',
+            wraplength=380,
+            justify='left'
+        ).pack(pady=(0, 20))
+
+        # Botões
+        btn_frame = tk.Frame(frame, bg='#2d2d2d')
+        btn_frame.pack(fill='x')
+
+        if buttons == 'yesno':
+            def on_yes():
+                result['value'] = True
+                dialog.destroy()
+
+            def on_no():
+                result['value'] = False
+                dialog.destroy()
+
+            tk.Button(
+                btn_frame,
+                text="✅ Sim",
+                font=('Arial', 10, 'bold'),
+                bg='#28a745',
+                fg='white',
+                relief='flat',
+                padx=20,
+                pady=8,
+                cursor='hand2',
+                command=on_yes
+            ).pack(side='left', fill='x', expand=True, padx=(0, 5))
+
+            tk.Button(
+                btn_frame,
+                text="❌ Não",
+                font=('Arial', 10),
+                bg='#dc3545',
+                fg='white',
+                relief='flat',
+                padx=20,
+                pady=8,
+                cursor='hand2',
+                command=on_no
+            ).pack(side='left', fill='x', expand=True, padx=(5, 0))
+        else:  # ok
+            def on_ok():
+                result['value'] = None
+                dialog.destroy()
+
+            tk.Button(
+                btn_frame,
+                text="✅ OK",
+                font=('Arial', 10, 'bold'),
+                bg='#0078d7',
+                fg='white',
+                relief='flat',
+                padx=30,
+                pady=8,
+                cursor='hand2',
+                command=on_ok
+            ).pack(fill='x')
+
+            # Enter = OK
+            dialog.bind('<Return>', lambda e: on_ok())
+
+        dialog.wait_window()
+        return result['value']
+
+    def _show_info(self, title, message):
+        """Substituir messagebox.showinfo"""
+        return self._custom_dialog(title, message, 'info', 'ok')
+
+    def _show_warning(self, title, message):
+        """Substituir messagebox.showwarning"""
+        return self._custom_dialog(title, message, 'warning', 'ok')
+
+    def _show_error(self, title, message):
+        """Substituir messagebox.showerror"""
+        return self._custom_dialog(title, message, 'error', 'ok')
+
+    def _ask_yesno(self, title, message):
+        """Substituir messagebox.askyesno"""
+        return self._custom_dialog(title, message, 'warning', 'yesno')
+
     def show(self):
         """Mostrar diálogo e retornar resultado"""
         self.root = tk.Tk()
-        self.root.title("🔐 Ultimate Fishing Bot v5.0 - Autenticação")
+
+        # ✅ Gerar título aleatório (igual à main_window)
+        random_title = self._generate_random_title()
+        self.root.title(random_title)
+
         self.root.geometry("600x780")
         self.root.configure(bg='#2d2d2d')
 
@@ -718,7 +894,7 @@ class AuthDialog:
     def change_language(self, language_code):
         """Mudar idioma da interface instantaneamente"""
         if not I18N_AVAILABLE:
-            messagebox.showwarning(
+            self._show_warning(
                 "⚠️ Aviso",
                 "Sistema de tradução não disponível"
             )
@@ -783,7 +959,7 @@ class AuthDialog:
         except Exception as e:
             print(f"[WARN] Erro ao atualizar interface: {e}")
             traceback.print_exc()
-            messagebox.showinfo(
+            self._show_info(
                 "🌐 Idioma Alterado",
                 f"Idioma alterado para {language_code.upper()}!\n\nAlguns textos serão atualizados no próximo acesso."
             )
@@ -804,7 +980,7 @@ class AuthDialog:
         remember = self.login_remember_var.get()
 
         if not username or not password or not license_key:
-            messagebox.showwarning("⚠️ Atenção", "Preencha todos os campos!")
+            self._show_warning("⚠️ Atenção", "Preencha todos os campos!")
             return
 
         self.authenticate(
@@ -830,25 +1006,25 @@ class AuthDialog:
         # Validações
         # ✅ Email é OPCIONAL - usuário pode deixar em branco
         if not username or not password or not license_key:
-            messagebox.showwarning("⚠️ Atenção", "Preencha Login, Senha e License Key!")
+            self._show_warning("⚠️ Atenção", "Preencha Login, Senha e License Key!")
             return
 
         if len(password) < 6:
-            messagebox.showwarning("⚠️ Atenção", "Senha deve ter no mínimo 6 caracteres!")
+            self._show_warning("⚠️ Atenção", "Senha deve ter no mínimo 6 caracteres!")
             return
 
         if password != password_confirm:
-            messagebox.showerror("❌ Erro", "As senhas não coincidem!")
+            self._show_error("❌ Erro", "As senhas não coincidem!")
             return
 
         # Validar email (OPCIONAL - só validar se usuário preencheu)
         if email and not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email):
-            messagebox.showwarning("⚠️ Atenção", "Email inválido!")
+            self._show_warning("⚠️ Atenção", "Email inválido!")
             return
 
         # Validar username (alfanumérico + _ -)
         if not re.match(r'^[\w-]{3,20}$', username):
-            messagebox.showwarning(
+            self._show_warning(
                 "⚠️ Atenção",
                 "Username deve ter 3-20 caracteres (letras, números, _ ou -)"
             )
@@ -868,7 +1044,7 @@ class AuthDialog:
         identifier = self.recovery_identifier_entry.get().strip()
 
         if not identifier:
-            messagebox.showwarning("⚠️ Atenção", "Digite seu email ou license key!")
+            self._show_warning("⚠️ Atenção", "Digite seu email ou license key!")
             return
 
         self.status_label.config(
@@ -907,7 +1083,7 @@ class AuthDialog:
             text="✅ Código enviado! Verifique seu email.",
             fg='#28a745'
         )
-        messagebox.showinfo(
+        self._show_info(
             "✅ Sucesso",
             "Código de recuperação enviado para seu email!\n\nVerifique sua caixa de entrada."
         )
@@ -925,11 +1101,11 @@ class AuthDialog:
         new_password = self.recovery_new_password_entry.get().strip()
 
         if not code or not new_password:
-            messagebox.showwarning("⚠️ Atenção", "Preencha o código e a nova senha!")
+            self._show_warning("⚠️ Atenção", "Preencha o código e a nova senha!")
             return
 
         if len(new_password) < 6:
-            messagebox.showwarning("⚠️ Atenção", "Senha deve ter no mínimo 6 caracteres!")
+            self._show_warning("⚠️ Atenção", "Senha deve ter no mínimo 6 caracteres!")
             return
 
         self.status_label.config(
@@ -971,7 +1147,7 @@ class AuthDialog:
             text="✅ Senha resetada! Faça login novamente.",
             fg='#28a745'
         )
-        messagebox.showinfo(
+        self._show_info(
             "✅ Sucesso",
             "Senha resetada com sucesso!\n\nFaça login na aba 'Login'."
         )
@@ -1017,25 +1193,17 @@ class AuthDialog:
                 # ✅ PRODUÇÃO: Servidor de autenticação
                 server_url = os.getenv('AUTH_SERVER_URL', 'https://private-serverpesca.pbzgje.easypanel.host')
 
-                if mode == 'register':
-                    endpoint = f"{server_url}/auth/register"
-                    payload = {
-                        'username': username,
-                        'email': email,
-                        'password': password,
-                        'license_key': license_key,
-                        'hwid': hwid,
-                        'pc_name': pc_name
-                    }
-                else:  # login
-                    endpoint = f"{server_url}/auth/login"
-                    payload = {
-                        'username': username,
-                        'password': password,
-                        'license_key': license_key,
-                        'hwid': hwid,
-                        'pc_name': pc_name
-                    }
+                # ✅ CORREÇÃO: Servidor Python usa APENAS /auth/activate para ambos os modos
+                # Não existe mais /auth/login nem /auth/register
+                endpoint = f"{server_url}/auth/activate"
+                payload = {
+                    'login': username,  # servidor espera 'login', não 'username'
+                    'email': email if mode == 'register' else '',
+                    'password': password,
+                    'license_key': license_key,
+                    'hwid': hwid,
+                    'pc_name': pc_name
+                }
 
                 # 3. Fazer requisição
                 print(f"[AUTH] Enviando para: {endpoint}")
@@ -1119,11 +1287,11 @@ class AuthDialog:
             text=f"❌ {error_msg}",
             fg='#dc3545'
         )
-        messagebox.showerror("❌ Erro de Autenticação", error_msg)
+        self._show_error("❌ Erro de Autenticação", error_msg)
 
     def cancel(self):
         """Cancelar autenticação"""
-        if messagebox.askyesno("❌ Cancelar", "Deseja cancelar a autenticação?\n\nO bot não funcionará sem autenticação."):
+        if self._ask_yesno("❌ Cancelar", "Deseja cancelar a autenticação?\n\nO bot não funcionará sem autenticação."):
             self.result = None
             self.root.destroy()
 

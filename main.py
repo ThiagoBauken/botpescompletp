@@ -104,8 +104,8 @@ def main():
         try:
             from utils.license_manager import LicenseManager
             from client.credential_manager import CredentialManager
-            # ✅ CORREÇÃO: Usar UnifiedAuthDialog que chama /auth/activate (Python FastAPI)
-            from ui.unified_auth_dialog import UnifiedAuthDialog
+            # ✅ CORREÇÃO: Usar AuthDialog corrigido que chama /auth/activate (Python FastAPI)
+            from ui.auth_dialog import AuthDialog
             from client.server_connector import connect_to_server, register_server_callbacks
 
             license_manager = LicenseManager()
@@ -149,8 +149,8 @@ def main():
                 safe_print("\n🔐 Primeira autenticação necessária...")
                 safe_print("   Por favor, insira suas credenciais:")
 
-                # Mostrar dialog unificado (Login + Senha + License Key)
-                auth_dialog = UnifiedAuthDialog(license_manager)
+                # Mostrar dialog de autenticação (Login + Senha + License Key)
+                auth_dialog = AuthDialog(license_manager, cred_manager)
                 auth_result = auth_dialog.show()
 
                 if not auth_result:
