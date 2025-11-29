@@ -1267,7 +1267,7 @@ class AuthDialog:
 
         # Retornar resultado
         self.result = {
-            'username': username,
+            'login': username,  # ✅ CORRIGIDO: main.py espera 'login', não 'username'
             'password': password,
             'license_key': license_key,
             'token': token,
