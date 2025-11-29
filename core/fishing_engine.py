@@ -185,7 +185,8 @@ class FishingEngine:
             import os
             # ✅ Adicionar diretório client ao path (funciona em .exe)
             if getattr(sys, 'frozen', False):
-                base_dir = os.path.dirname(sys.executable)
+                # ✅ CRÍTICO: usar sys.argv[0] ao invés de sys.executable
+                base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
             else:
                 base_dir = os.path.dirname(os.path.dirname(__file__))
 
@@ -395,14 +396,14 @@ class FishingEngine:
             if not self.is_running:
                 _safe_print("⚠️ Sistema de pesca não está rodando")
                 return False
-            
+
             _safe_print("🛑 Parando sistema de pesca...")
-            
+
             # Sinalizar parada
             self.stop_event.set()
             self.is_running = False
             self.is_paused = False
-            
+
             # IMPORTANTE: Liberar todos os inputs ativos antes de parar
             if self.input_manager:
                 try:
@@ -412,11 +413,26 @@ class FishingEngine:
                     self.input_manager.emergency_stop()  # Limpeza geral
                 except Exception as e:
                     _safe_print(f"⚠️ Erro ao liberar inputs: {e}")
-            
-            # Aguardar thread terminar
+
+            # ✅ RESET: Sempre voltar para PAR 1, VARA 1 (slot absoluto 1)
+            # Evita dessincronização quando usuário para e troca vara manualmente
+            if self.rod_manager:
+                _safe_print("🔄 Resetando sistema de varas para PAR 1, VARA 1...")
+                self.rod_manager.current_pair_index = 0   # Volta pro par 1
+                self.rod_manager.current_rod_in_pair = 0  # Volta pra primeira vara
+                _safe_print("   ✅ Sistema resetado - próximo início será SEMPRE na vara 1 (slot absoluto)")
+
+            # ✅ NOVO: Notificar servidor que bot parou (servidor também reseta vara)
+            if self.ws_client and self.ws_client.is_connected():
+                try:
+                    self.ws_client.send_fishing_stopped()
+                except Exception as e:
+                    _safe_print(f"⚠️ Erro ao enviar fishing_stopped ao servidor: {e}")
+
+            # Aguardar thread terminar (timeout curto para resposta rápida)
             if self.fishing_thread and self.fishing_thread.is_alive():
-                self.fishing_thread.join(timeout=5.0)
-            
+                self.fishing_thread.join(timeout=0.5)
+
             self.change_state(FishingState.STOPPED)
             _safe_print("✅ Sistema de pesca parado")
             
@@ -447,6 +463,22 @@ class FishingEngine:
 
             if self.is_paused:
                 _safe_print("⏸️ Sistema de pesca pausado")
+
+                # ✅ RESET: Sempre voltar para PAR 1, VARA 1 (slot absoluto 1)
+                # Evita dessincronização quando usuário pausa e troca vara manualmente
+                if self.rod_manager:
+                    _safe_print("🔄 Resetando sistema de varas para PAR 1, VARA 1...")
+                    self.rod_manager.current_pair_index = 0   # Volta pro par 1
+                    self.rod_manager.current_rod_in_pair = 0  # Volta pra primeira vara
+                    _safe_print("   ✅ Sistema resetado - ao despausar começará SEMPRE na vara 1 (slot absoluto)")
+
+                # ✅ NOVO: Notificar servidor que bot pausou (servidor também reseta vara)
+                if self.ws_client and self.ws_client.is_connected():
+                    try:
+                        self.ws_client.send_fishing_paused()
+                    except Exception as e:
+                        _safe_print(f"⚠️ Erro ao enviar fishing_paused ao servidor: {e}")
+
                 self.change_state(FishingState.PAUSED)
             else:
                 _safe_print("▶️ Sistema de pesca despausado")
@@ -562,14 +594,20 @@ class FishingEngine:
 
             while not self.stop_event.is_set():
                 try:
-                    # Verificar se pausado
+                    # Verificar se pausado (sleep interruptível)
                     if self.is_paused:
-                        time.sleep(0.5)
+                        for _ in range(10):  # 10 x 50ms = 500ms total
+                            if self.stop_event.is_set() or not self.is_running:
+                                break
+                            time.sleep(0.05)
                         continue
 
-                    # ✅ CRÍTICO: Verificar se aguardando batch completar
+                    # ✅ CRÍTICO: Verificar se aguardando batch completar (sleep interruptível)
                     if self.waiting_for_batch_completion:
-                        time.sleep(0.5)
+                        for _ in range(10):  # 10 x 50ms = 500ms total
+                            if self.stop_event.is_set() or not self.is_running:
+                                break
+                            time.sleep(0.05)
                         continue
 
                     # ✅ DEBUG: Loop retomado após batch (só aparece quando NÃO está mais waiting)
@@ -586,7 +624,10 @@ class FishingEngine:
                         # Verificar se é seguro pausar (sem operações em andamento)
                         if not self._is_safe_to_pause():
                             _safe_print("⏸️ [PAUSA NATURAL] Operações em andamento - aguardando...")
-                            time.sleep(1.0)
+                            for _ in range(20):  # 20 x 50ms = 1000ms total
+                                if self.stop_event.is_set() or not self.is_running:
+                                    break
+                                time.sleep(0.05)
                             continue  # Aguardar próximo loop
 
                         # Seguro para pausar - executar pausa natural
@@ -640,8 +681,11 @@ class FishingEngine:
                         if inventory_open or chest_open:
                             _safe_print("⏸️ [TROCA VARA] Inventário/baú aberto - aguardando fechar...")
                             _safe_print("   ℹ️ Troca será executada após operação de baú terminar")
-                            # Não continuar - aguardar próximo loop
-                            time.sleep(0.5)
+                            # Não continuar - aguardar próximo loop (sleep interruptível)
+                            for _ in range(10):  # 10 x 50ms = 500ms total
+                                if self.stop_event.is_set() or not self.is_running:
+                                    break
+                                time.sleep(0.05)
                             continue
 
                         _safe_print("🔄 Vara precisa ser trocada (inventário fechado)...")
@@ -835,8 +879,9 @@ class FishingEngine:
 
                 # Usar mouse_down_relative (Mouse.press) ao invés de mouse_down (AbsoluteMouse.press)
                 # ✅ CRÍTICO: Verificar se botão JÁ está pressionado (por equip_rod)
-                if hasattr(self.input_manager, 'mouse_state'):
-                    already_pressed = self.input_manager.mouse_state.get('right_button_down', False)
+                # ✅ CORREÇÃO: Usar método thread-safe ao invés de acesso direto
+                if hasattr(self.input_manager, '_get_mouse_button_state'):
+                    already_pressed = self.input_manager._get_mouse_button_state('right_button_down')
                 else:
                     already_pressed = False
 
@@ -969,8 +1014,8 @@ class FishingEngine:
             clicking_active = True
 
             while time.time() - start_time < rapid_duration and clicking_active:
-                # Verificar se ainda está rodando
-                if not self.is_running or self.is_paused:
+                # ⚡ VERIFICAÇÃO IMEDIATA: Resposta rápida ao ESC
+                if self.stop_event.is_set() or not self.is_running or self.is_paused:
                     clicking_active = False  # Parar cliques
                     return False
 
@@ -1060,8 +1105,8 @@ class FishingEngine:
             clicking_active = True
 
             while time.time() - start_time < timeout:
-                # Verificar se ainda está rodando
-                if not self.is_running or self.is_paused:
+                # ⚡ VERIFICAÇÃO IMEDIATA: Resposta rápida ao ESC (loop externo)
+                if self.stop_event.is_set() or not self.is_running or self.is_paused:
                     clicking_active = False  # Parar cliques
 
                     # ✅ PARAR ciclo de S ao pausar/parar
@@ -1090,8 +1135,8 @@ class FishingEngine:
                     # Cliques durante o movimento
                     movement_start = time.time()
                     while time.time() - movement_start < movement_duration and clicking_active:
-                        # Verificar parada
-                        if not self.is_running or self.is_paused:
+                        # ⚡ VERIFICAÇÃO IMEDIATA: Resposta rápida ao ESC (loop interno)
+                        if self.stop_event.is_set() or not self.is_running or self.is_paused:
                             clicking_active = False  # Parar cliques IMEDIATAMENTE
                             self.input_manager.key_up(movement_direction)
                             return (False, False)  # (não capturou, sem manutenção)
@@ -1124,8 +1169,14 @@ class FishingEngine:
                                 return (True, False)  # (capturou peixe, sem manutenção)
 
                         # Aguardar próximo clique (só se ainda ativo)
+                        # ✅ RANDOMIZAÇÃO: Intervalo variável para anti-detecção
                         if clicking_active:
-                            time.sleep(click_interval)
+                            import random
+                            # Calcular intervalo base +/- 30% de variação
+                            min_interval = click_interval * 0.7
+                            max_interval = click_interval * 1.3
+                            random_interval = random.uniform(min_interval, max_interval)
+                            time.sleep(random_interval)
 
                     # Soltar tecla de movimento
                     self.input_manager.key_up(movement_direction)
@@ -1772,13 +1823,34 @@ class FishingEngine:
         _safe_print("="*80)
 
         try:
-            # PASSO 1: Executar switch_rod pendente (APENAS se NÃO houve operações de baú!)
+            # PASSO 1: Executar switch_rod pendente
+            # ✅ CORREÇÃO: EXECUTAR SEMPRE para modo 2 varas funcionar corretamente!
             if self.pending_switch_rod_callback:
+                # Verificar se modo 2 varas está ativo
+                two_rod_mode = False
+                if self.config_manager:
+                    two_rod_mode = self.config_manager.get('rod_system.two_rod_mode', False)
+
                 if self.had_chest_operations:
                     _safe_print("🔄 [PASSO 1] switch_rod pendente detectado")
-                    _safe_print("   ⚠️ MAS houve operações de baú - ChestCoordinator JÁ escolheu a vara correta!")
-                    _safe_print("   ❌ NÃO executar switch_rod - vara já foi equipada pelo ChestCoordinator")
-                    _safe_print("   🎯 Mantendo vara escolhida pelo ChestCoordinator (baseado em usos)")
+
+                    if two_rod_mode:
+                        # ✅ MODO 2 VARAS: EXECUTAR switch_rod para alternar vara 1 ↔ vara 2
+                        _safe_print("   🎣 MODO 2 VARAS: Executando switch_rod APÓS operações de baú")
+                        _safe_print("   📌 Servidor solicitou alternância vara 1 ↔ vara 2")
+                        try:
+                            success = self.pending_switch_rod_callback()
+                            if success:
+                                _safe_print("   ✅ Switch rod executado (modo 2 varas)")
+                            else:
+                                _safe_print("   ⚠️ Switch rod falhou ou não necessário")
+                        except Exception as e:
+                            _safe_print(f"   ❌ Erro ao executar switch_rod: {e}")
+                    else:
+                        # ✅ MODO NORMAL (6 varas): ChestCoordinator já escolheu vara correta
+                        _safe_print("   ⚠️ MAS houve operações de baú - ChestCoordinator JÁ escolheu a vara correta!")
+                        _safe_print("   ❌ NÃO executar switch_rod - vara já foi equipada pelo ChestCoordinator")
+                        _safe_print("   🎯 Mantendo vara escolhida pelo ChestCoordinator (baseado em usos)")
                 else:
                     _safe_print("🔄 [PASSO 1] Executando switch_rod pendente...")
                     _safe_print("   ℹ️ SEM operações de baú - switch_rod deve ser executado")

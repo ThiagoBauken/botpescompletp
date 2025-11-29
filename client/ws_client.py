@@ -201,6 +201,26 @@ class WebSocketClient:
         _safe_print("✅ [WS→SERVER] Evento cleaning_done enviado")
         logger.info("✅ Evento cleaning_done enviado")
 
+    def send_fishing_stopped(self):
+        """
+        Notificar servidor que bot foi parado (F2 ou stop button)
+        Servidor reseta vara para slot 1 para evitar dessincronização
+        """
+        message = {"event": "fishing_stopped"}
+        self._send_async(message)
+        _safe_print("🛑 [WS→SERVER] Evento fishing_stopped enviado")
+        logger.info("🛑 Evento fishing_stopped enviado - servidor resetará vara para slot 1")
+
+    def send_fishing_paused(self):
+        """
+        Notificar servidor que bot foi pausado (F1)
+        Servidor reseta vara para slot 1 para evitar dessincronização
+        """
+        message = {"event": "fishing_paused"}
+        self._send_async(message)
+        _safe_print("⏸️ [WS→SERVER] Evento fishing_paused enviado")
+        logger.info("⏸️ Evento fishing_paused enviado - servidor resetará vara para slot 1")
+
     def send_config_sync(self, config: dict):
         """
         ✅ NOVO: Sincronizar configurações do cliente com o servidor
@@ -480,11 +500,21 @@ class WebSocketClient:
                     auth_msg = {
                         "token": self.token
                     }
+
+                    # ✅ CORREÇÃO: Debug detalhado da autenticação
+                    _safe_print(f"   📤 Enviando autenticação ao WebSocket...")
+                    _safe_print(f"   🔑 Token: {self.token[:20]}...{self.token[-20:] if len(self.token) > 40 else ''}")
+                    _safe_print(f"   📏 Tamanho: {len(self.token)} caracteres")
+
                     await websocket.send(json.dumps(auth_msg))
 
                     # Aguardar resposta de autenticação
+                    _safe_print(f"   ⏳ Aguardando resposta do servidor...")
                     response = await websocket.recv()
                     data = json.loads(response)
+
+                    # ✅ CORREÇÃO: Log da resposta completa
+                    _safe_print(f"   📥 Resposta recebida: {json.dumps(data, indent=2)}")
 
                     if data.get("type") == "connected":
                         self.connected = True
@@ -503,7 +533,18 @@ class WebSocketClient:
                         _safe_print("=" * 60)
 
                     elif "error" in data:
-                        _safe_print(f"❌ Erro de autenticação: {data['error']}")
+                        _safe_print("=" * 60)
+                        _safe_print(f"❌ ERRO DE AUTENTICAÇÃO WEBSOCKET")
+                        _safe_print("=" * 60)
+                        _safe_print(f"   📋 Erro: {data['error']}")
+                        _safe_print(f"   🔑 Token enviado: {self.token[:20]}...{self.token[-20:] if len(self.token) > 40 else ''}")
+                        _safe_print(f"   📝 Email/Login: {self.email}")
+                        _safe_print("")
+                        _safe_print("   💡 Possíveis soluções:")
+                        _safe_print("      1. Verificar se a licença está vinculada ao HWID no servidor")
+                        _safe_print("      2. Fazer logout e login novamente para obter novo token")
+                        _safe_print("      3. Verificar logs do servidor de autenticação")
+                        _safe_print("=" * 60)
                         self.running = False
                         break
 
