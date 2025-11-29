@@ -70,6 +70,61 @@ except ImportError:
     def get_com_ports():
         return ['COM1', 'COM2', 'COM3', 'COM4', 'COM5']
 
+# ✅ Função auxiliar para encontrar recursos (funciona em .py e .exe compilado)
+def resource_path(relative_path):
+    """
+    Retorna o caminho absoluto para um recurso, funcionando tanto em script Python
+    quanto em executável compilado (Nuitka/PyInstaller).
+
+    Recursos compilados DENTRO do .exe (motion.gif, magoicon.ico):
+    - Buscados em sys._MEIPASS (pasta temporária de extração)
+
+    Recursos EXTERNOS ao .exe (templates/*.png, config/, data/):
+    - Buscados ao lado do .exe (sys.argv[0])
+
+    Args:
+        relative_path: Caminho relativo do recurso (ex: "magoicon.ico" ou "templates/motion.gif")
+
+    Returns:
+        Caminho absoluto do recurso
+    """
+    try:
+        # Lista de arquivos compilados DENTRO do .exe
+        compiled_resources = [
+            "magoicon.ico",
+            os.path.join("templates", "motion.gif"),
+            "templates/motion.gif"  # Versão com barra normal
+        ]
+
+        # Normalizar path para comparação
+        normalized_path = relative_path.replace("\\", "/")
+        is_compiled = normalized_path in [r.replace("\\", "/") for r in compiled_resources]
+
+        # Se for recurso compilado E estiver em modo frozen, usar pasta de extração temporária
+        if is_compiled and getattr(sys, 'frozen', False):
+            # ✅ NUITKA: usar __compiled__.containing_dir
+            try:
+                base_path = __compiled__.containing_dir
+                return os.path.join(base_path, relative_path)
+            except NameError:
+                # ✅ PYINSTALLER: fallback para _MEIPASS
+                if hasattr(sys, '_MEIPASS'):
+                    base_path = sys._MEIPASS
+                    return os.path.join(base_path, relative_path)
+
+        # Para recursos externos ou modo Python normal
+        if getattr(sys, 'frozen', False):
+            # ✅ CRÍTICO: usar sys.argv[0] para arquivos EXTERNOS ao .exe
+            base_path = os.path.dirname(os.path.abspath(sys.argv[0]))
+        else:
+            # Rodando como script Python
+            base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        return os.path.join(base_path, relative_path)
+    except Exception as e:
+        print(f"[WARN] Erro ao resolver caminho de recurso: {e}")
+        return relative_path
+
 class MockConfig:
     def __init__(self):
         # Simular valores do default_config.json
@@ -104,8 +159,8 @@ class FishingBotUI:
         chars = string.ascii_letters + string.digits
         return ''.join(random.choice(chars) for _ in range(length))
 
-    def __init__(self, config_manager=None, ws_client=None):
-        """Inicializar UI com ConfigManager e WebSocket Client (opcional)"""
+    def __init__(self, config_manager=None, ws_client=None, license_manager=None):
+        """Inicializar UI com ConfigManager, WebSocket Client e License Manager (opcionais)"""
         # Usar ConfigManager real se disponível, senão usar Mock
         if config_manager:
             self.config_manager = config_manager
@@ -126,6 +181,13 @@ class FishingBotUI:
         else:
             print("[INFO] WebSocket Client não disponível - modo offline")
 
+        # ✅ License Manager para exibir tempo restante da licença
+        self.license_manager = license_manager
+        if license_manager and license_manager.is_licensed():
+            print("[OK] License Manager recebido - contagem regressiva ativa")
+        else:
+            print("[INFO] License Manager não disponível - contagem regressiva desabilitada")
+
         self.notebook = None
         self.is_destroyed = False
         
@@ -136,10 +198,33 @@ class FishingBotUI:
         random_title = self._generate_random_title()
         self.main_window.title(random_title)
 
+        # ✅ Configurar ícone personalizado da janela
+        try:
+            icon_path = resource_path("magoicon.ico")
+
+            if os.path.exists(icon_path):
+                self.main_window.iconbitmap(icon_path)
+                print(f"[OK] Ícone personalizado carregado: {icon_path}")
+            else:
+                print(f"[WARN] Ícone não encontrado: {icon_path}")
+        except Exception as e:
+            print(f"[WARN] Erro ao carregar ícone: {e}")
+
+        # ✅ CORREÇÃO: Definir ícone na barra de tarefas do Windows
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                # Define AppUserModelID para que Windows use o ícone correto na taskbar
+                myappid = 'FishingMageBot.v5.0'
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+                print(f"[OK] AppUserModelID configurado para taskbar: {myappid}")
+            except Exception as e:
+                print(f"[WARN] Erro ao configurar ícone da taskbar: {e}")
+
         self.main_window.geometry("1200x800")  # Aumentar tamanho para melhor responsividade
         self.main_window.configure(bg='#0f1419')  # Azul escuro mais elegante
         self.main_window.resizable(True, True)
-        
+
         # Configurar tamanho mínimo
         self.main_window.minsize(1000, 600)
         
@@ -168,30 +253,32 @@ class FishingBotUI:
         }
 
         # Variáveis tkinter
-        self.auto_clean_interval_var = tk.StringVar(value="1")
+        # ✅ CORRIGIDO: default auto_clean.interval: 10
+        self.auto_clean_interval_var = tk.StringVar(value="10")
         self.auto_clean_enabled_var = tk.BooleanVar(value=True)
         self.auto_clean_baits_enabled_var = tk.BooleanVar(value=True)
         self.auto_clean_status_label = None
-        
-        # Config tab
-        self.cycle_timeout_var = tk.StringVar(value="122")
-        self.rod_switch_limit_var = tk.StringVar(value="20")
-        self.clicks_per_second_var = tk.StringVar(value="9")
-        self.maintenance_timeout_var = tk.StringVar(value="3")
-        self.chest_side_var = tk.StringVar(value="right")
-        self.macro_type_var = tk.StringVar(value="padrão")
-        self.chest_distance_var = tk.StringVar(value="1000")
-        self.auto_reload_var = tk.BooleanVar(value=True)
-        self.auto_focus_var = tk.BooleanVar(value=False)
+
+        # ✅ CORRIGIDO: Config tab - valores agora batem com default_config.json
+        self.cycle_timeout_var = tk.StringVar(value="122")     # default: cycle_timeout: 122
+        self.rod_switch_limit_var = tk.StringVar(value="20")   # OK
+        self.clicks_per_second_var = tk.StringVar(value="6")   # default: clicks_per_second: 6
+        self.maintenance_timeout_var = tk.StringVar(value="1") # default: maintenance_timeout: 1
+        self.chest_side_var = tk.StringVar(value="right")      # OK
+        self.macro_type_var = tk.StringVar(value="padrão")     # OK
+        self.chest_distance_var = tk.StringVar(value="1200")   # default: chest_distance: 1200
+        self.auto_reload_var = tk.BooleanVar(value=True)       # OK
+        self.auto_focus_var = tk.BooleanVar(value=False)       # OK
         self.broken_rod_action_var = tk.StringVar(value="discard")
-        
-        # Feeding tab
+        self.two_rod_mode_var = tk.BooleanVar(value=False)  # Modo 2 varas (slots 1,2 apenas)
+
+        # ✅ CORRIGIDO: Feeding tab - valores agora batem com default_config.json
         self.feeding_enabled_var = tk.BooleanVar(value=True)
         self.feeding_trigger_mode_var = tk.StringVar(value="catches")
-        self.feeding_trigger_catches_var = tk.StringVar(value="3")
-        self.feeding_trigger_time_var = tk.StringVar(value="20")
-        self.feeding_session_count_var = tk.StringVar(value="5")
-        self.feeding_max_uses_var = tk.StringVar(value="20")
+        self.feeding_trigger_catches_var = tk.StringVar(value="15")  # default: trigger_catches: 15
+        self.feeding_trigger_time_var = tk.StringVar(value="20")     # OK
+        self.feeding_session_count_var = tk.StringVar(value="3")     # default: feeds_per_session: 3
+        self.feeding_max_uses_var = tk.StringVar(value="20")         # OK
         self.feeding_auto_detect_var = tk.BooleanVar(value=True)
         self.feeding_slot1_x_var = tk.StringVar(value="1306")
         self.feeding_slot1_y_var = tk.StringVar(value="858")
@@ -794,55 +881,77 @@ class FishingBotUI:
         except Exception as e:
             print(f"[WARN] Erro ao configurar tema: {e}")
 
-    def load_animated_gif(self):
-        """Carregar e animar o GIF do mago pescando"""
-        try:
-            gif_path = os.path.join("templates", "motion.gif")
+    def load_animated_gif_async(self):
+        """⚡ Carregar GIF em background thread (não bloqueia UI)"""
+        import threading
 
-            if not os.path.exists(gif_path):
-                print(f"[WARN] GIF não encontrado: {gif_path}")
-                return
-
-            # Abrir GIF e extrair frames
-            self.gif_image = Image.open(gif_path)
-            self.gif_frames = []
-            self.gif_durations = []
-
+        def load_gif_thread():
+            """Thread separada para carregar e processar GIF"""
             try:
-                for frame in ImageSequence.Iterator(self.gif_image):
-                    # Redimensionar frame preservando proporção original
-                    original_width, original_height = frame.size
-                    target_height = 72  # Altura maior para aproveitar melhor o espaço
+                # ✅ Usar função auxiliar para encontrar o GIF
+                gif_path = resource_path(os.path.join("templates", "motion.gif"))
 
-                    # Calcular largura proporcional
-                    aspect_ratio = original_width / original_height
-                    target_width = int(target_height * aspect_ratio)
+                if not os.path.exists(gif_path):
+                    print(f"[WARN] GIF não encontrado: {gif_path}")
+                    return
 
-                    resized_frame = frame.copy().resize((target_width, target_height), Image.Resampling.LANCZOS)
-                    photo_frame = ImageTk.PhotoImage(resized_frame)
-                    self.gif_frames.append(photo_frame)
+                # Abrir GIF e extrair frames
+                gif_image = Image.open(gif_path)
+                temp_frames = []
+                temp_durations = []
 
-                    # Pegar duração do frame (em ms)
-                    duration = frame.info.get('duration', 100)
-                    self.gif_durations.append(duration)
-            except EOFError:
-                pass  # Fim dos frames
+                try:
+                    for frame in ImageSequence.Iterator(gif_image):
+                        # Redimensionar frame preservando proporção original
+                        original_width, original_height = frame.size
+                        target_height = 72
 
-            if not self.gif_frames:
-                print("[WARN] Nenhum frame carregado do GIF")
-                return
+                        # Calcular largura proporcional
+                        aspect_ratio = original_width / original_height
+                        target_width = int(target_height * aspect_ratio)
 
-            # Estado da animação
-            self.current_gif_frame = 0
-            self.gif_is_animating = False  # Começa pausado
+                        # ⚡ Usar BILINEAR ao invés de LANCZOS (3x mais rápido)
+                        resized_frame = frame.copy().resize((target_width, target_height), Image.Resampling.BILINEAR)
+                        photo_frame = ImageTk.PhotoImage(resized_frame)
+                        temp_frames.append(photo_frame)
 
-            # Iniciar loop de animação
-            self.animate_gif()
+                        # Pegar duração do frame (em ms)
+                        duration = frame.info.get('duration', 100)
+                        temp_durations.append(duration)
+                except EOFError:
+                    pass  # Fim dos frames
 
-            print(f"[OK] GIF carregado com {len(self.gif_frames)} frames")
+                if not temp_frames:
+                    print("[WARN] Nenhum frame carregado do GIF")
+                    return
 
-        except Exception as e:
-            print(f"[WARN] Erro ao carregar GIF: {e}")
+                # ✅ Atualizar variáveis na thread principal (thread-safe)
+                def update_gif_ui():
+                    self.gif_image = gif_image
+                    self.gif_frames = temp_frames
+                    self.gif_durations = temp_durations
+                    self.current_gif_frame = 0
+                    self.gif_is_animating = False  # Começa pausado
+
+                    # Iniciar loop de animação
+                    self.animate_gif()
+
+                    print(f"[OK] GIF carregado com {len(self.gif_frames)} frames")
+
+                # Executar update na thread principal
+                if hasattr(self, 'main_window'):
+                    self.main_window.after(0, update_gif_ui)
+
+            except Exception as e:
+                print(f"[WARN] Erro ao carregar GIF: {e}")
+
+        # Iniciar thread de carregamento
+        thread = threading.Thread(target=load_gif_thread, daemon=True)
+        thread.start()
+
+    def load_animated_gif(self):
+        """⚠️ DEPRECATED: Usar load_animated_gif_async() ao invés"""
+        pass
 
     def animate_gif(self):
         """Animar o GIF frame por frame (apenas quando bot está rodando)"""
@@ -904,9 +1013,33 @@ class FishingBotUI:
             self.gif_label_right = tk.Label(title_frame, bg=self.theme_colors['bg_primary'])
             self.gif_label_right.pack(side='left', padx=(10, 0))
 
-            # Carregar GIF animado
-            self.load_animated_gif()
-            
+            # ⚡ Carregar GIF de forma assíncrona (não bloqueia a UI)
+            self.gif_frames = []  # Inicializar vazio
+            self.gif_is_animating = False
+            self.current_gif_frame = 0
+
+            # Agendar carregamento do GIF após UI aparecer (100ms)
+            self.main_window.after(100, self.load_animated_gif_async)
+
+            # ✅ Label de contagem regressiva da licença
+            if self.license_manager and self.license_manager.is_licensed():
+                license_frame = tk.Frame(main_frame, bg=self.theme_colors['bg_primary'])
+                license_frame.pack(pady=(0, 10))
+
+                self.license_countdown_label = tk.Label(
+                    license_frame,
+                    text="",
+                    font=('Segoe UI', 10),
+                    fg='#888888',  # Cinza médio
+                    bg=self.theme_colors['bg_primary']
+                )
+                self.license_countdown_label.pack()
+
+                # Iniciar atualização da contagem regressiva
+                self.update_license_countdown()
+            else:
+                self.license_countdown_label = None
+
             # Criar notebook (sistema de abas)
             self.notebook = ttk.Notebook(main_frame)
             self.notebook.pack(fill='both', expand=True, pady=10)
@@ -924,7 +1057,10 @@ class FishingBotUI:
             
             # Carregar valores do config após criar todas as abas
             self.load_config_values()
-            
+
+            # ✅ Aplicar visibilidade inicial das abas (após criar todas)
+            self._apply_initial_tab_visibility()
+
             # Criar barra de status FORA do main_frame (na janela principal)
             self.create_status_bar()
             
@@ -936,6 +1072,11 @@ class FishingBotUI:
         control_frame = tk.Frame(self.notebook, bg=self.theme_colors['bg_primary'])
         tab_text = i18n.get_text('tabs.control_tab') if I18N_AVAILABLE else '🎮 Controle'
         self.notebook.add(control_frame, text=tab_text)
+
+        # ✅ Armazenar frame para gerenciar visibilidade
+        if not hasattr(self, 'tab_frames'):
+            self.tab_frames = {}
+        self.tab_frames['control'] = control_frame
         
         # Adicionar scroll à aba de controle
         canvas = tk.Canvas(control_frame, bg=self.theme_colors['bg_primary'], highlightthickness=0)
@@ -1119,7 +1260,7 @@ class FishingBotUI:
         self.register_translatable_widget('labels', 'clean_every_label', clean_every_lbl, 'ui.clean_every')
         clean_every_lbl.pack(side='left')
 
-        self.auto_clean_interval_var = tk.StringVar(value="10")
+        # ✅ CORRIGIDO: Removida redefinição duplicada (já definida na linha 241)
         tk.Entry(fish_frame, textvariable=self.auto_clean_interval_var, width=5).pack(side='left', padx=5)
 
         catches_lbl = tk.Label(fish_frame, text=i18n.get_text("ui.catches") if I18N_AVAILABLE else "pescas",
@@ -1156,7 +1297,104 @@ class FishingBotUI:
                  command=self.save_cleaning_config,
                  bg='#17a2b8', fg='white', font=('Arial', 10, 'bold'),
                  padx=15, pady=5).pack(side='left')
-        
+
+        # ═══════════════════════════════════════════════════════
+        # 📊 STATS & RANKING (100% Server-Side)
+        # ═══════════════════════════════════════════════════════
+
+        stats_frame = tk.LabelFrame(scrollable_frame, text=_("stats_ranking.your_statistics"),
+                                   bg='#1a1a1a', fg='white', font=('Arial', 11, 'bold'))
+        stats_frame.pack(fill='x', padx=10, pady=10)
+
+        # Grid de estatísticas
+        stats_grid = tk.Frame(stats_frame, bg='#1a1a1a')
+        stats_grid.pack(padx=15, pady=10)
+
+        # Usuário
+        tk.Label(stats_grid, text=_("stats_ranking.user"), fg='#ffaa00', bg='#1a1a1a',
+                font=('Arial', 10, 'bold')).grid(row=0, column=0, sticky='w', pady=3)
+        self.stats_username_label = tk.Label(stats_grid, text=_("stats_ranking.loading"), fg='white',
+                                            bg='#1a1a1a', font=('Arial', 10))
+        self.stats_username_label.grid(row=0, column=1, sticky='w', padx=10, pady=3)
+
+        # Total pescado
+        tk.Label(stats_grid, text=_("stats_ranking.total_fished"), fg='#ffaa00', bg='#1a1a1a',
+                font=('Arial', 10, 'bold')).grid(row=1, column=0, sticky='w', pady=3)
+        self.stats_total_label = tk.Label(stats_grid, text="0", fg='white',
+                                          bg='#1a1a1a', font=('Arial', 10))
+        self.stats_total_label.grid(row=1, column=1, sticky='w', padx=10, pady=3)
+
+        # Este mês
+        tk.Label(stats_grid, text=_("stats_ranking.this_month"), fg='#ffaa00', bg='#1a1a1a',
+                font=('Arial', 10, 'bold')).grid(row=2, column=0, sticky='w', pady=3)
+        self.stats_month_label = tk.Label(stats_grid, text="0", fg='white',
+                                          bg='#1a1a1a', font=('Arial', 10))
+        self.stats_month_label.grid(row=2, column=1, sticky='w', padx=10, pady=3)
+
+        # Seus rankings
+        tk.Label(stats_grid, text=_("stats_ranking.your_rankings"), fg='#ffaa00', bg='#1a1a1a',
+                font=('Arial', 10, 'bold')).grid(row=3, column=0, sticky='w', pady=3)
+
+        rank_text = tk.Frame(stats_grid, bg='#1a1a1a')
+        rank_text.grid(row=3, column=1, sticky='w', padx=10, pady=3)
+
+        tk.Label(rank_text, text=_("stats_ranking.monthly"), fg='#aaaaaa', bg='#1a1a1a',
+                font=('Arial', 9)).pack(side='left')
+        self.stats_rank_monthly_label = tk.Label(rank_text, text="#0", fg='#00ff00',
+                                                 bg='#1a1a1a', font=('Arial', 9, 'bold'))
+        self.stats_rank_monthly_label.pack(side='left', padx=5)
+
+        tk.Label(rank_text, text=_("stats_ranking.overall"), fg='#aaaaaa', bg='#1a1a1a',
+                font=('Arial', 9)).pack(side='left', padx=(10,0))
+        self.stats_rank_alltime_label = tk.Label(rank_text, text="#0", fg='#00ff00',
+                                                 bg='#1a1a1a', font=('Arial', 9, 'bold'))
+        self.stats_rank_alltime_label.pack(side='left', padx=5)
+
+        # ─────────────────────────────────────────────────
+        # 🏅 TOP 5 - Este Mês
+        # ─────────────────────────────────────────────────
+        monthly_frame = tk.LabelFrame(scrollable_frame, text=_("stats_ranking.top5_monthly"),
+                                     bg='#1a1a1a', fg='white', font=('Arial', 11, 'bold'))
+        monthly_frame.pack(fill='x', padx=10, pady=5)
+
+        self.monthly_ranking_text = tk.Text(monthly_frame, height=6, width=50,
+                                           bg='#2a2a2a', fg='white',
+                                           font=('Courier New', 9),
+                                           relief='flat', state='disabled')
+        self.monthly_ranking_text.pack(padx=10, pady=10)
+
+        # ─────────────────────────────────────────────────
+        # 🏆 TOP 5 - Geral
+        # ─────────────────────────────────────────────────
+        alltime_frame = tk.LabelFrame(scrollable_frame, text=_("stats_ranking.top5_alltime"),
+                                     bg='#1a1a1a', fg='white', font=('Arial', 11, 'bold'))
+        alltime_frame.pack(fill='x', padx=10, pady=5)
+
+        self.alltime_ranking_text = tk.Text(alltime_frame, height=6, width=50,
+                                           bg='#2a2a2a', fg='white',
+                                           font=('Courier New', 9),
+                                           relief='flat', state='disabled')
+        self.alltime_ranking_text.pack(padx=10, pady=10)
+
+        # Botão para atualizar manualmente
+        refresh_btn = tk.Button(scrollable_frame, text=_("stats_ranking.refresh_stats"),
+                               command=self.refresh_stats_and_ranking,
+                               bg='#28a745', fg='white', font=('Arial', 9),
+                               padx=10, pady=5)
+        refresh_btn.pack(pady=5)
+
+        # ✅ NOVO: Atualizar stats automaticamente ao iniciar (após 2 segundos)
+        self.main_window.after(2000, self.refresh_stats_and_ranking)
+
+        # ✅ NOVO: Atualizar stats a cada 5 minutos (300000ms)
+        def auto_refresh_stats():
+            self.refresh_stats_and_ranking()
+            self.main_window.after(300000, auto_refresh_stats)
+
+        self.main_window.after(300000, auto_refresh_stats)
+
+        # ═══════════════════════════════════════════════════════
+
         # Configurar canvas e scrollbar para a aba de controle
         canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
         scrollbar.pack(side="right", fill="y", pady=10)
@@ -1166,6 +1404,7 @@ class FishingBotUI:
         config_frame = tk.Frame(self.notebook, bg='#1a1a1a')
         tab_text = i18n.get_text('tabs.config_tab') if I18N_AVAILABLE else '⚙️ Configurações'
         self.notebook.add(config_frame, text=tab_text)
+        self.tab_frames['config'] = config_frame
         
         # Título
         title_label = tk.Label(config_frame,
@@ -1227,7 +1466,8 @@ class FishingBotUI:
         # Lado do Baú e Tipo de Macro (mesma linha)
         tk.Label(chest_grid, text=_("config_hardcoded.lado_do_baú"),
                 fg='white', bg='#2a2a2a', font=('Arial', 10)).grid(row=0, column=0, sticky='w', pady=5)
-        chest_combo = tk.OptionMenu(chest_grid, self.chest_side_var, "left", "right",
+        chest_combo = tk.OptionMenu(chest_grid, self.chest_side_var,
+                                    _("chest_options.left"), _("chest_options.right"),
                                     command=self._on_chest_side_change)  # ✅ Salvar automaticamente ao mudar
         chest_combo.configure(bg='#404040', fg='white', width=10)
         chest_combo.grid(row=0, column=1, padx=10, pady=5)
@@ -1281,7 +1521,26 @@ class FishingBotUI:
                       variable=self.broken_rod_action_var, value='save',
                       fg='white', bg='#2a2a2a', selectcolor='#404040',
                       font=('Arial', 10)).grid(row=1, column=0, sticky='w', pady=5)
-        
+
+        # ========== MODO 2 VARAS ==========
+        two_rod_frame = tk.LabelFrame(scrollable_frame, text=_("two_rod_mode.title"),
+                                     bg='#2a2a2a', fg='white', font=('Arial', 11, 'bold'))
+        two_rod_frame.pack(fill='x', padx=15, pady=10)
+
+        two_rod_grid = tk.Frame(two_rod_frame, bg='#2a2a2a')
+        two_rod_grid.pack(padx=10, pady=10)
+
+        # Checkbox para ativar modo 2 varas
+        tk.Checkbutton(two_rod_grid, text=_("two_rod_mode.enable"),
+                      variable=self.two_rod_mode_var,
+                      fg='white', bg='#2a2a2a', selectcolor='#404040',
+                      font=('Arial', 10, 'bold')).grid(row=0, column=0, sticky='w', pady=5)
+
+        # Descrição do modo
+        tk.Label(two_rod_grid, text=_("two_rod_mode.description"),
+                fg='#ffaa00', bg='#2a2a2a', font=('Arial', 9),
+                justify='left').grid(row=1, column=0, sticky='w', pady=5, padx=20)
+
         # ========== PRIORIDADE DE ISCAS ==========
         bait_config_frame = tk.LabelFrame(scrollable_frame, text=_("config_hardcoded.prioridade_de_iscas"),
                                          bg='#2a2a2a', fg='white', font=('Arial', 10, 'bold'))
@@ -1311,8 +1570,8 @@ class FishingBotUI:
         self.config_bait_priority_vars = {}
 
         # Criar lista ordenada por prioridade atual
-        self.config_bait_names = ['crocodilo', 'carne de urso', 'carne de lobo', 'bigcat', 'trout', 'grub', 'worm']
-        self.config_ordered_baits = ['crocodilo', 'carne de urso', 'carne de lobo', 'bigcat', 'trout', 'grub', 'worm']
+        self.config_bait_names = ['crocodilo', 'carne de urso', 'carne de lobo', 'bigcat', 'trout', 'yellowperch', 'grub', 'worm']
+        self.config_ordered_baits = ['crocodilo', 'carne de urso', 'carne de lobo', 'bigcat', 'trout', 'yellowperch', 'grub', 'worm']
 
         # Atualizar listbox e criar checkboxes
         self.update_config_bait_listbox()
@@ -1356,7 +1615,53 @@ class FishingBotUI:
                                  bg='#28a745', fg='white', font=('Arial', 9),
                                  padx=10, pady=5)
         bait_save_btn.pack(side='left', padx=5)
-        
+
+        # ========== VISIBILIDADE DE ABAS ==========
+        tabs_visibility_frame = tk.LabelFrame(scrollable_frame, text=_("tab_visibility.title"),
+                                             bg='#2a2a2a', fg='white', font=('Arial', 11, 'bold'))
+        tabs_visibility_frame.pack(fill='x', padx=15, pady=10)
+
+        tabs_grid = tk.Frame(tabs_visibility_frame, bg='#2a2a2a')
+        tabs_grid.pack(padx=10, pady=10)
+
+        # Criar variáveis para cada aba
+        self.tab_visibility_vars = {}
+
+        # ✅ NOTA: "config" (Configurações) não está na lista para evitar bloquear acesso
+        tabs_list = [
+            ("control", "🎮 Controle", True),
+            ("feeding", "🍖 Alimentação", True),
+            ("templates", "🎯 Templates", False),      # ← Oculta por padrão
+            ("anti_detection", "🛡️ Anti-Detecção", True),
+            ("viewer", "🐟 Visualizador", False),      # ← Oculta por padrão
+            ("hotkeys", "⌨️ Hotkeys", True),
+            ("arduino", "🔌 Arduino", True),
+            ("help", "❓ Ajuda", True)
+        ]
+
+        for i, (key, label, default) in enumerate(tabs_list):
+            # Carregar preferência salva
+            saved_value = self.config_manager.get(f'ui.visible_tabs.{key}', default)
+            var = tk.BooleanVar(value=saved_value)
+            self.tab_visibility_vars[key] = var
+
+            checkbox = tk.Checkbutton(
+                tabs_grid,
+                text=label,
+                variable=var,
+                command=lambda k=key, v=var: self._on_tab_visibility_change(k, v),
+                fg='white',
+                bg='#2a2a2a',
+                selectcolor='#404040',
+                font=('Arial', 10)
+            )
+            checkbox.grid(row=i//3, column=i%3, sticky='w', padx=15, pady=3)
+
+        # Descrição
+        tk.Label(tabs_visibility_frame,
+                text=_("tab_visibility.description"),
+                fg='#ffaa00', bg='#2a2a2a', font=('Arial', 9)).pack(pady=(0,10))
+
         # ========== BOTÃO SALVAR ==========
         button_frame = tk.Frame(scrollable_frame, bg='#1a1a1a')
         button_frame.pack(fill='x', padx=15, pady=20)
@@ -1375,6 +1680,7 @@ class FishingBotUI:
         feeding_frame = tk.Frame(self.notebook, bg='#1a1a1a')
         tab_text = i18n.get_text('tabs.feeding_tab') if I18N_AVAILABLE else '🍖 Alimentação'
         self.notebook.add(feeding_frame, text=tab_text)
+        self.tab_frames['feeding'] = feeding_frame
 
         # Título
         title_label = tk.Label(feeding_frame,
@@ -1536,6 +1842,7 @@ class FishingBotUI:
         confidence_frame = tk.Frame(self.notebook, bg='#1a1a1a')
         tab_text = i18n.get_text('tabs.templates_tab') if I18N_AVAILABLE else '🎯 Templates'
         self.notebook.add(confidence_frame, text=tab_text)
+        self.tab_frames['templates'] = confidence_frame
         
         # Título da aba
         title_label = tk.Label(confidence_frame,
@@ -1606,7 +1913,7 @@ class FishingBotUI:
                 "💥 VARAS QUEBRADAS (2)": ['varaquebrada', 'nobauquebrada'],
                 "🐟 PEIXES PRINCIPAIS (6)": ['SALMONN', 'TROUTT', 'shark', 'sardine', 'anchovy', 'yellowperch'],
                 "🐟 PEIXES NOVOS (4)": ['herring', 'peixecru', 'catfish', 'roughy'],
-                "🥩 ISCAS/CARNES (6)": ['carneurso', 'carnedelobo', 'crocodilo', 'bigcat', 'grub', 'minhoca'],
+                "🥩 ISCAS/CARNES (7)": ['carneurso', 'carnedelobo', 'crocodilo', 'bigcat', 'yellowperch', 'grub', 'minhoca'],
                 "🍖 ALIMENTAÇÃO (4)": ['eat', 'frito', 'filefrito', 'gut'],
                 "📦 CONTAINERS (2)": ['largebox', 'scrap'],
                 "🔧 OUTROS ITENS (3)": ['bluecard', 'flare', 'bullet'],
@@ -1674,7 +1981,7 @@ class FishingBotUI:
                 fine_tune_frame = tk.Frame(grid_frame, bg='#2a2a2a')
                 fine_tune_frame.grid(row=row, column=3, padx=5, pady=2)
 
-                tk.Button(fine_tune_frame, text="-1%",
+                tk.Button(fine_tune_frame, text=_("templates_hardcoded.minus_1"),
                          command=lambda var=confidence_var: self.adjust_confidence(var, -0.01),
                          bg='#dc3545', fg='white', font=('Arial', 8), width=3).pack(side='left', padx=1)
 
@@ -1777,9 +2084,8 @@ class FishingBotUI:
                 # Formato legado: template_confidence.template_name
                 self.config_manager.set(f'template_confidence.{template_name}', confidence_value)
             
-            # IMPORTANTE: Salvar no arquivo
-            if hasattr(self.config_manager, 'save_config'):
-                self.config_manager.save_config()
+            # ✅ CORREÇÃO: Salvar no arquivo
+            if self.config_manager.save_user_config():
                 print(f"[SAVE] Template '{template_name}' salvo como {confidence_value:.2f} e persistido no arquivo")
                 return True
             else:
@@ -1872,12 +2178,11 @@ class FishingBotUI:
                 except Exception as e:
                     print(f"[ERROR] Erro ao configurar {template_name}: {e}")
 
-            # Salvar TODAS as configurações no arquivo UMA VEZ (mais eficiente)
-            if hasattr(self.config_manager, 'save_config'):
-                self.config_manager.save_config()
+            # ✅ CORREÇÃO: Salvar TODAS as configurações no arquivo UMA VEZ
+            if self.config_manager.save_user_config():
                 print(f"[SAVE] Salvos {saved_count} templates com sucesso! Configurações persistidas no arquivo!")
             else:
-                print(f"[WARN] {saved_count} templates atualizados mas não persistidos (save_config não disponível)")
+                print(f"[ERROR] Falha ao salvar {saved_count} templates no disco")
 
         except Exception as e:
             print(f"[ERROR] Erro ao salvar configurações: {e}")
@@ -1902,9 +2207,15 @@ class FishingBotUI:
                 self.save_feeding_config()
                 self.save_anti_detection_config()
 
-                # Caminho do arquivo padrão
-                default_config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'default_config.json')
-                user_config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'config.json')
+                # ✅ CORREÇÃO: Caminho do arquivo padrão (funciona em .exe)
+                if getattr(sys, 'frozen', False):
+                    # ✅ CRÍTICO: usar sys.argv[0] ao invés de sys.executable
+                    base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+                else:
+                    base_dir = os.path.dirname(os.path.dirname(__file__))
+
+                default_config_path = os.path.join(base_dir, 'config', 'default_config.json')
+                user_config_path = os.path.join(base_dir, 'data', 'config.json')
 
                 # Ler config do usuário
                 if os.path.exists(user_config_path):
@@ -1968,11 +2279,18 @@ class FishingBotUI:
             print(f"[ERROR] Erro no atalho rápido: {e}")
 
     def open_templates_folder(self):
-        """Abrir pasta de templates"""
+        """Abrir pasta de templates (funciona em .exe)"""
         import os
         import subprocess
         try:
-            templates_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
+            # ✅ Funciona em .exe
+            if getattr(sys, 'frozen', False):
+                # ✅ CRÍTICO: usar sys.argv[0] ao invés de sys.executable
+                base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+            else:
+                base_dir = os.path.dirname(os.path.dirname(__file__))
+
+            templates_path = os.path.join(base_dir, 'templates')
             if os.path.exists(templates_path):
                 if os.name == 'nt':  # Windows
                     subprocess.run(['explorer', templates_path])
@@ -1986,7 +2304,49 @@ class FishingBotUI:
     def save_anti_detection_config(self):
         """Salvar configurações de anti-detecção"""
         print("[SAVE] Salvando configurações de anti-detecção...")
-        # Implementar salvamento aqui
+        try:
+            # ✅ Ativação geral
+            self.config_manager.set('anti_detection.enabled', self.anti_detection_enabled.get())
+
+            # ✅ Click variation
+            self.config_manager.set('anti_detection.click_variation.enabled', self.click_variation_enabled.get())
+            self.config_manager.set('anti_detection.click_delay_range', [self.click_min_delay.get(), self.click_max_delay.get()])
+
+            # ✅ Movement variation
+            self.config_manager.set('anti_detection.movement_variation.enabled', self.movement_variation_enabled.get())
+            self.config_manager.set('anti_detection.movement_duration_a_min', self.a_duration_min.get())
+            self.config_manager.set('anti_detection.movement_duration_a_max', self.a_duration_max.get())
+            self.config_manager.set('anti_detection.movement_duration_d_min', self.d_duration_min.get())
+            self.config_manager.set('anti_detection.movement_duration_d_max', self.d_duration_max.get())
+            self.config_manager.set('anti_detection.movement_pause_min', self.movement_pause_min.get())
+            self.config_manager.set('anti_detection.movement_pause_max', self.movement_pause_max.get())
+
+            # ✅ S key cycle
+            if hasattr(self, 's_key_enabled'):
+                self.config_manager.set('anti_detection.s_key_cycle.enabled', self.s_key_enabled.get())
+                self.config_manager.set('anti_detection.s_key_cycle.press_duration_min', self.s_press_duration_min.get())
+                self.config_manager.set('anti_detection.s_key_cycle.press_duration_max', self.s_press_duration_max.get())
+                self.config_manager.set('anti_detection.s_key_cycle.release_duration_min', self.s_release_duration_min.get())
+                self.config_manager.set('anti_detection.s_key_cycle.release_duration_max', self.s_release_duration_max.get())
+
+            # ✅ Natural breaks
+            self.config_manager.set('anti_detection.natural_breaks', self.natural_breaks_var.get())
+            self.config_manager.set('anti_detection.break_mode', self.break_mode_var.get())
+            self.config_manager.set('anti_detection.break_catches', int(self.break_catches_var.get()))
+            self.config_manager.set('anti_detection.break_minutes', int(self.break_minutes_var.get()))
+            self.config_manager.set('anti_detection.break_duration_min', int(self.break_duration_min_var.get()))
+            self.config_manager.set('anti_detection.break_duration_max', int(self.break_duration_max_var.get()))
+
+            # ✅ Salvar no disco
+            if self.config_manager.save_user_config():
+                print("[OK] Configurações de anti-detecção salvas com sucesso!")
+                messagebox.showinfo(_("common.success"), _("save_messages.anti_detection_saved"))
+            else:
+                print("[ERROR] Falha ao salvar configurações de anti-detecção")
+                messagebox.showerror(_("common.error"), _("common.save_failed"))
+        except Exception as e:
+            print(f"[ERROR] Erro ao salvar configurações de anti-detecção: {e}")
+            messagebox.showerror(_("common.error"), f"{_('common.error_saving')}: {e}")
     
     def reset_anti_detection_config(self):
         """Resetar configurações de anti-detecção para padrão"""
@@ -2003,6 +2363,7 @@ class FishingBotUI:
         anti_frame = tk.Frame(self.notebook, bg='#1a1a1a')
         tab_text = i18n.get_text('tabs.anti_detection_tab') if I18N_AVAILABLE else '🛡️ Anti-Detecção'
         self.notebook.add(anti_frame, text=tab_text)
+        self.tab_frames['anti_detection'] = anti_frame
 
         # Título
         title_label = tk.Label(anti_frame,
@@ -2272,9 +2633,8 @@ class FishingBotUI:
                 self.config_manager.set('anti_detection.break_catches', int(self.break_catches_var.get()))
                 self.config_manager.set('anti_detection.break_minutes', int(self.break_minutes_var.get()))
 
-                # Persistir no arquivo
-                if hasattr(self.config_manager, 'save_config'):
-                    self.config_manager.save_config()
+                # ✅ CORREÇÃO: Persistir no arquivo
+                if self.config_manager.save_user_config():
                     print("[OK] Configurações Anti-Detecção salvas e persistidas!")
 
                     # Recarregar timing no InputManager
@@ -2284,7 +2644,8 @@ class FishingBotUI:
 
                     messagebox.showinfo(_("messages.title_success"), _("messages.anti_detection_saved"))
                 else:
-                    print("[WARN] ConfigManager sem método save_config")
+                    print("[ERROR] Falha ao salvar configurações no disco")
+                    messagebox.showerror(_("common.error"), _("common.save_failed"))
             else:
                 print("[ERROR] ConfigManager não disponível")
 
@@ -2414,9 +2775,8 @@ class FishingBotUI:
                 self.config_manager.set('bait_system.priority', bait_priority)
                 self.config_manager.set('bait_system.enabled', bait_enabled)
 
-                # Persistir no arquivo
-                if hasattr(self.config_manager, 'save_config'):
-                    self.config_manager.save_config()
+                # ✅ CORREÇÃO: Persistir no arquivo
+                if self.config_manager.save_user_config():
                     print(f"[OK] Prioridade de iscas salva: {bait_priority}")
                     print(f"[OK] Estado de iscas salvo: {bait_enabled}")
 
@@ -2425,7 +2785,8 @@ class FishingBotUI:
 
                     messagebox.showinfo(_("messages.title_success"), _("messages.bait_priority_saved"))
                 else:
-                    print("[WARN] ConfigManager sem método save_config")
+                    print("[ERROR] Falha ao salvar prioridades de iscas no disco")
+                    messagebox.showerror(_("common.error"), _("save_messages.priorities_failed"))
             else:
                 print("[ERROR] ConfigManager não disponível")
 
@@ -2457,6 +2818,7 @@ class FishingBotUI:
         viewer_frame = tk.Frame(self.notebook, bg='#1a1a1a')
         tab_text = i18n.get_text('tabs.catch_viewer_tab') if I18N_AVAILABLE else '🐟 Visualizador'
         self.notebook.add(viewer_frame, text=tab_text)
+        self.tab_frames['viewer'] = viewer_frame
 
         # Título
         title_label = tk.Label(viewer_frame,
@@ -2644,6 +3006,7 @@ class FishingBotUI:
         hotkeys_frame = tk.Frame(self.notebook, bg='#1a1a1a')
         tab_text = i18n.get_text('tabs.hotkeys_tab') if I18N_AVAILABLE else '⌨️ Hotkeys'
         self.notebook.add(hotkeys_frame, text=tab_text)
+        self.tab_frames['hotkeys'] = hotkeys_frame
         
         # Título
         title_label = tk.Label(hotkeys_frame,
@@ -2771,6 +3134,7 @@ class FishingBotUI:
         arduino_frame = tk.Frame(self.notebook, bg='#1a1a1a')
         tab_text = i18n.get_text('tabs.arduino_tab') if I18N_AVAILABLE else '🔌 Arduino'
         self.notebook.add(arduino_frame, text=tab_text)
+        self.tab_frames['arduino'] = arduino_frame
         
         # Título
         title_label = tk.Label(arduino_frame,
@@ -2917,6 +3281,7 @@ class FishingBotUI:
         help_frame = tk.Frame(self.notebook, bg='#1a1a1a')
         tab_text = i18n.get_text('tabs.help_tab') if I18N_AVAILABLE else '❓ Ajuda'
         self.notebook.add(help_frame, text=tab_text)
+        self.tab_frames['help'] = help_frame
         
         # Título
         title_label = tk.Label(help_frame,
@@ -2969,7 +3334,41 @@ class FishingBotUI:
             tk.Label(trouble_frame, text=trouble,
                     fg='#ffcccc', bg='#2a2a2a', font=('Arial', 9),
                     anchor='w', justify='left').pack(anchor='w', padx=10, pady=2)
-        
+
+        # ========== COMUNIDADE / SUPORTE ==========
+        community_frame = tk.LabelFrame(scrollable_frame, text=_("community.title"),
+                                       bg='#2a2a2a', fg='white', font=('Arial', 10, 'bold'))
+        community_frame.pack(fill='x', padx=20, pady=10)
+
+        # Discord link
+        discord_container = tk.Frame(community_frame, bg='#2a2a2a')
+        discord_container.pack(anchor='w', padx=10, pady=5)
+
+        tk.Label(discord_container, text=_("community.discord"),
+                fg='#7289da', bg='#2a2a2a', font=('Arial', 9, 'bold')).pack(side='left', padx=(0, 5))
+
+        discord_link = tk.Label(discord_container, text="https://discord.gg/J6bsUGPrCN",
+                               fg='#5865f2', bg='#2a2a2a', font=('Arial', 9, 'underline'),
+                               cursor='hand2')
+        discord_link.pack(side='left')
+
+        # Função para abrir o link
+        def open_discord(event):
+            import webbrowser
+            webbrowser.open("https://discord.gg/J6bsUGPrCN")
+
+        discord_link.bind("<Button-1>", open_discord)
+
+        # Efeito hover
+        def on_enter(e):
+            discord_link.config(fg='#7289da')
+
+        def on_leave(e):
+            discord_link.config(fg='#5865f2')
+
+        discord_link.bind("<Enter>", on_enter)
+        discord_link.bind("<Leave>", on_leave)
+
         # Configurar scroll
         canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
         scrollbar.pack(side="right", fill="y", pady=10)
@@ -3048,17 +3447,36 @@ class FishingBotUI:
             print("[SAVE] Salvando configurações de hotkeys...")
             
             if hasattr(self, 'config_manager') and self.config_manager:
-                # Coletar valores das hotkeys
+                # ✅ CORREÇÃO: Mapeamento UI nome -> HotkeyAction value
+                ui_to_action = {
+                    'start': 'start_bot',
+                    'pause': 'stop_bot',  # UI usa pause mas action é stop_bot
+                    'stop': 'pause_bot',  # UI usa stop mas action é pause_bot
+                    'emergency': 'emergency_stop',
+                    'interface': 'toggle_ui',
+                    'macro_execute': 'execute_macro',
+                    'macro_chest': 'test_macro',
+                    'macro_record': 'execute_macro',  # Fallback
+                    'test_mouse': 'toggle_ui',  # Fallback
+                    'test_feeding': 'manual_feeding',
+                    'test_cleaning': 'manual_cleaning',
+                    'test_maintenance': 'rod_maintenance'
+                }
+
+                # ✅ INVERTER: Coletar como {tecla: action_value} (formato que HotkeyManager espera)
                 hotkeys_config = {}
                 for hotkey_name, var in self.hotkey_vars.items():
-                    hotkeys_config[hotkey_name] = var.get()
-                
+                    key = var.get().lower()  # Tecla (ex: "f9")
+                    action_value = ui_to_action.get(hotkey_name)  # Action enum value
+                    if action_value:
+                        hotkeys_config[key] = action_value
+                        print(f"[HOTKEY] Mapeado: {key} -> {action_value}")
+
                 # Salvar no ConfigManager
                 self.config_manager.set('hotkeys', hotkeys_config)
-                
-                # Persistir no arquivo
-                if hasattr(self.config_manager, 'save_config'):
-                    self.config_manager.save_config()
+
+                # ✅ CORREÇÃO: Persistir no arquivo usando método correto
+                if self.config_manager.save_user_config():
                     print("[OK] Hotkeys salvas e persistidas!")
 
                     # 🔄 RECARREGAR HOTKEYS EM TEMPO REAL
@@ -3082,11 +3500,12 @@ class FishingBotUI:
                         # Limpar mensagem após 3 segundos
                         self.main_window.after(3000, lambda: self.hotkey_status_label.config(text=""))
                 else:
-                    print("[WARN] ConfigManager sem método save_config")
+                    print("[ERROR] Falha ao salvar hotkeys no disco")
+                    messagebox.showerror(_("common.error"), _("save_messages.hotkeys_save_failed"))
                     if hasattr(self, 'hotkey_status_label'):
                         self.hotkey_status_label.config(
-                            text=_("ui_hardcoded.hotkeys_atualizadas_mas"),
-                            fg='#ffc107'
+                            text=_("save_messages.hotkeys_error_saving"),
+                            fg='#dc3545'
                         )
             else:
                 print("[ERROR] ConfigManager não disponível")
@@ -4635,8 +5054,9 @@ class FishingBotUI:
                 self.config_manager.set('viewer.antialiasing', antialiasing)
                 self.config_manager.set('viewer.show_slots', show_slots)
 
-                if hasattr(self.config_manager, 'save_config'):
-                    self.config_manager.save_config()
+                # ✅ CORREÇÃO: usar save_user_config
+            if self.config_manager.save_user_config():
+                    self.config_manager.save_user_config()
                     print("[OK] Configurações do viewer salvas!")
 
             # Feedback visual
@@ -4796,14 +5216,15 @@ class FishingBotUI:
                 'pt': '🇧🇷 Português',
                 'en': '🇺🇸 English',
                 'es': '🇪🇸 Español',
-                'ru': '🇷🇺 Русский'
+                'ru': '🇷🇺 Русский',
+                'zh': '🇨🇳 中文'
             }
 
             # Criar lista de opções com nomes amigáveis
             if I18N_AVAILABLE:
                 available_codes = list(i18n.get_available_languages().keys())
             else:
-                available_codes = ['pt', 'en', 'es', 'ru']
+                available_codes = ['pt', 'en', 'es', 'ru', 'zh']
 
             language_options = [self.language_names.get(code, code) for code in available_codes]
 
@@ -4860,7 +5281,7 @@ class FishingBotUI:
                 # SALVAR idioma selecionado no config para persistir entre sessões
                 if hasattr(self, 'config_manager') and self.config_manager:
                     self.config_manager.set('ui_settings.language', selected_language)
-                    self.config_manager.save_config()
+                    self.config_manager.save_user_config()
                     print(f"[OK] Idioma salvo no config: {selected_language}")
 
                 # Atualizar TODA a interface (tabs + todos os widgets)
@@ -4966,119 +5387,137 @@ class FishingBotUI:
             # 1. Atualizar títulos das abas
             self.update_tab_names()
 
-            # 2. Atualizar LabelFrames
-            for widget_id, data in self.translatable_widgets.get('frames', {}).items():
+            # 2. Atualizar widgets registrados (sistema antigo - ~17 widgets)
+            for widget_type in ['frames', 'labels', 'buttons', 'checkboxes', 'radiobuttons']:
+                for widget_id, data in self.translatable_widgets.get(widget_type, {}).items():
+                    try:
+                        widget = data['widget']
+                        translation_key = data['translation_key']
+                        text = i18n.get_text(translation_key)
+                        if text and text != translation_key:
+                            widget.config(text=text)
+                            updated_count += 1
+                    except Exception as e:
+                        print(f"[WARN] Error updating {widget_type} {widget_id}: {e}")
+
+            # 3. NOVO: Varredura recursiva inteligente para widgets com _translation_key
+            # Este é o sistema que permite atualizar widgets sem registro manual
+            def update_widgets_recursive(parent, depth=0):
+                """Varre recursivamente todos os widgets e atualiza traduções"""
+                count = 0
+
                 try:
-                    widget = data['widget']
-                    translation_key = data['translation_key']
-                    text = i18n.get_text(translation_key)
-                    if text and text != translation_key:
-                        widget.config(text=text)
-                        updated_count += 1
-                except Exception as e:
-                    print(f"[WARN] Error updating frame {widget_id}: {e}")
-
-            # 3. Atualizar Labels
-            for widget_id, data in self.translatable_widgets.get('labels', {}).items():
-                try:
-                    widget = data['widget']
-                    translation_key = data['translation_key']
-                    text = i18n.get_text(translation_key)
-                    if text and text != translation_key:
-                        widget.config(text=text)
-                        updated_count += 1
-                except Exception as e:
-                    print(f"[WARN] Error updating label {widget_id}: {e}")
-
-            # 4. Atualizar Buttons
-            for widget_id, data in self.translatable_widgets.get('buttons', {}).items():
-                try:
-                    widget = data['widget']
-                    translation_key = data['translation_key']
-                    text = i18n.get_text(translation_key)
-                    if text and text != translation_key:
-                        widget.config(text=text)
-                        updated_count += 1
-                except Exception as e:
-                    print(f"[WARN] Error updating button {widget_id}: {e}")
-
-            # 5. Atualizar Checkboxes
-            for widget_id, data in self.translatable_widgets.get('checkboxes', {}).items():
-                try:
-                    widget = data['widget']
-                    translation_key = data['translation_key']
-                    text = i18n.get_text(translation_key)
-                    if text and text != translation_key:
-                        widget.config(text=text)
-                        updated_count += 1
-                except Exception as e:
-                    print(f"[WARN] Error updating checkbox {widget_id}: {e}")
-
-            # 6. Atualizar Radiobuttons
-            for widget_id, data in self.translatable_widgets.get('radiobuttons', {}).items():
-                try:
-                    widget = data['widget']
-                    translation_key = data['translation_key']
-                    text = i18n.get_text(translation_key)
-                    if text and text != translation_key:
-                        widget.config(text=text)
-                        updated_count += 1
-                except Exception as e:
-                    print(f"[WARN] Error updating radiobutton {widget_id}: {e}")
-
-            # 7. FORÇA RECRIAÇÃO DAS TABS para aplicar traduções
-            # Esta é a forma mais eficaz de garantir que TODOS os textos sejam atualizados
-            # quando o idioma muda. Alternativa: registrar todos os widgets individualmente.
-            try:
-                # Salvar aba atual
-                current_tab_index = self.notebook.index(self.notebook.select())
-
-                # Obter lista de todas as tabs
-                tabs = self.notebook.tabs()
-
-                # Para cada tab, destruir conteúdo e recriar
-                # NOTA: Isso causará perda de estado dos formulários
-                # Uma abordagem melhor seria salvar/restaurar os valores, mas isso requer mais trabalho
-
-                # Por enquanto, vamos apenas atualizar os textos dos LabelFrames que são os mais visíveis
-                def update_all_labelframes(parent):
-                    """Atualizar recursivamente todos os LabelFrames"""
-                    count = 0
                     for child in parent.winfo_children():
+                        widget_updated = False
                         widget_type = type(child).__name__
-                        if widget_type == 'LabelFrame':
+
+                        # Estratégia 1: Widget tem _translation_key (preferencial)
+                        if hasattr(child, '_translation_key'):
                             try:
-                                # Tentar obter o texto atual
-                                current_text = child.cget('text')
-                                # Se contém emoji ou texto em português, tente retraduzir
-                                # (método heurístico - não perfeito mas funciona)
-                                if current_text and len(current_text) > 0:
-                                    # Forçar atualização chamando i18n.get_text() novamente
-                                    # Não temos a chave original, então não podemos fazer nada aqui
-                                    # A solução real seria recriar os widgets, mas isso é muito custoso
-                                    pass
+                                new_text = i18n.get_text(child._translation_key)
+                                if new_text and new_text != child._translation_key:
+                                    child.config(text=new_text)
+                                    count += 1
+                                    widget_updated = True
                             except:
                                 pass
-                        # Recursão nos filhos
-                        count += update_all_labelframes(child)
-                    return count
 
-                # Atualizar LabelFrames recursivamente
-                if hasattr(self, 'notebook'):
-                    for tab in tabs:
+                        # Estratégia 2: Detectar automaticamente por tipo de widget
+                        # (para widgets que NÃO têm _translation_key)
+                        if not widget_updated and widget_type in ['Label', 'Button', 'Checkbutton', 'Radiobutton', 'LabelFrame']:
+                            try:
+                                # Obter texto atual do widget
+                                current_text = child.cget('text')
+
+                                if current_text and len(current_text) > 0:
+                                    # Tentar encontrar a chave de tradução comparando com idioma anterior
+                                    # Isso funciona porque o texto atual está no idioma antigo
+                                    translation_key = self._find_translation_key_by_text(current_text)
+
+                                    if translation_key:
+                                        # Obter tradução no novo idioma
+                                        new_text = i18n.get_text(translation_key)
+                                        if new_text and new_text != current_text and new_text != translation_key:
+                                            child.config(text=new_text)
+                                            # Armazenar chave para próximas trocas
+                                            child._translation_key = translation_key
+                                            count += 1
+                                            widget_updated = True
+                            except:
+                                pass
+
+                        # Recursão nos filhos do widget
+                        count += update_widgets_recursive(child, depth + 1)
+
+                except Exception as e:
+                    if depth == 0:  # Só reportar erro no nível raiz
+                        print(f"[WARN] Error in recursive update: {e}")
+
+                return count
+
+            # Aplicar varredura recursiva em todas as tabs
+            if hasattr(self, 'notebook'):
+                tabs = self.notebook.tabs()
+                for tab in tabs:
+                    try:
                         tab_widget = self.notebook.nametowidget(tab)
-                        updated_count += update_all_labelframes(tab_widget)
-
-                # Restaurar aba ativa
-                self.notebook.select(tabs[current_tab_index])
-
-            except Exception as e:
-                print(f"[WARN] Error forcing tab refresh: {e}")
+                        updated_count += update_widgets_recursive(tab_widget)
+                    except:
+                        pass
 
             print(f"[OK] Updated {updated_count} UI elements to {self.current_language}")
 
         except Exception as e:
             print(f"[ERROR] Error updating UI texts: {e}")
+
+    def _find_translation_key_by_text(self, text):
+        """
+        🔍 Encontrar chave de tradução procurando o texto em todas as traduções
+
+        Busca o texto atual nas traduções do idioma ANTERIOR para encontrar a chave,
+        permitindo obter a tradução no novo idioma.
+
+        Args:
+            text: Texto atual do widget
+
+        Returns:
+            Chave de tradução ou None se não encontrar
+        """
+        try:
+            if not I18N_AVAILABLE or not text:
+                return None
+
+            # Obter todos os idiomas disponíveis
+            available_languages = i18n.translations.keys()
+
+            # Procurar em todos os idiomas (o texto atual pode estar em qualquer um)
+            for lang in available_languages:
+                if lang in i18n.translations:
+                    # Função recursiva para buscar em estrutura aninhada
+                    def search_in_dict(d, target_text, prefix=''):
+                        for key, value in d.items():
+                            current_key = f"{prefix}.{key}" if prefix else key
+
+                            if isinstance(value, dict):
+                                # Recursão em dicionários aninhados
+                                result = search_in_dict(value, target_text, current_key)
+                                if result:
+                                    return result
+                            elif isinstance(value, str) and value == target_text:
+                                # Encontrou! Retornar a chave
+                                return current_key
+
+                        return None
+
+                    # Buscar no idioma atual
+                    result = search_in_dict(i18n.translations[lang], text)
+                    if result:
+                        return result
+
+            return None
+
+        except Exception:
+            return None
     
     # ===== MÉTODOS DE CONTROLE =====
     
@@ -5100,9 +5539,8 @@ class FishingBotUI:
                 # self.config_manager.set('auto_clean.chest_side', self.chest_side_var.get())
                 # self.config_manager.set('auto_clean.chest_method', self.macro_type_var.get())
                 
-                # Persistir no arquivo
-                if hasattr(self.config_manager, 'save_config'):
-                    self.config_manager.save_config()
+                # ✅ CORREÇÃO: Persistir no arquivo
+                if self.config_manager.save_user_config():
                     print(f"[OK] Configurações de limpeza salvas e persistidas!")
 
                     # ✅ CRÍTICO: Notificar servidor sobre mudanças
@@ -5110,7 +5548,8 @@ class FishingBotUI:
 
                     messagebox.showinfo(_("messages.title_success"), _("messages.cleaning_settings_saved"))
                 else:
-                    print("[WARN] ConfigManager sem método save_config")
+                    print("[ERROR] Falha ao salvar configurações de limpeza no disco")
+                    messagebox.showerror("Erro", "Falha ao salvar configurações")
             else:
                 print("[ERROR] ConfigManager não disponível")
                 
@@ -5140,11 +5579,10 @@ class FishingBotUI:
                 self.config_manager.set('auto_reload', self.auto_reload_var.get())
                 self.config_manager.set('auto_focus', self.auto_focus_var.get())
                 self.config_manager.set('rod_system.broken_rod_action', self.broken_rod_action_var.get())
-                
-                # Persistir no arquivo
-                if hasattr(self.config_manager, 'save_config'):
-                    self.config_manager.save_config()
+                self.config_manager.set('rod_system.two_rod_mode', self.two_rod_mode_var.get())
 
+                # ✅ CORREÇÃO: Persistir no arquivo usando método correto
+                if self.config_manager.save_user_config():
                     # IMPORTANTE: Recarregar configurações nos engines
                     self._reload_engine_configs()
 
@@ -5154,7 +5592,8 @@ class FishingBotUI:
                     print(f"[OK] Todas as configurações salvas e persistidas!")
                     messagebox.showinfo(_("messages.title_success"), _("messages.all_settings_saved"))
                 else:
-                    print("[WARN] ConfigManager sem método save_config")
+                    print("[ERROR] Falha ao salvar configurações no disco")
+                    messagebox.showerror("Erro", "Falha ao salvar configurações no disco")
             else:
                 print("[ERROR] ConfigManager não disponível")
                 
@@ -5166,16 +5605,18 @@ class FishingBotUI:
         """Resetar todas as configurações para padrão"""
         print("[RELOAD] Resetando todas as configurações...")
         try:
-            self.cycle_timeout_var.set("122")
-            self.rod_switch_limit_var.set("20")
-            self.clicks_per_second_var.set("9")
-            self.maintenance_timeout_var.set("3")
-            self.chest_side_var.set("right")
-            self.macro_type_var.set("padrão")
-            self.chest_distance_var.set("1000")
-            self.auto_reload_var.set(True)
-            self.auto_focus_var.set(False)
+            # ✅ CORRIGIDO: Valores agora batem com default_config.json
+            self.cycle_timeout_var.set("122")     # default: cycle_timeout: 122
+            self.rod_switch_limit_var.set("20")   # OK
+            self.clicks_per_second_var.set("6")   # default: clicks_per_second: 6
+            self.maintenance_timeout_var.set("1") # default: maintenance_timeout: 1
+            self.chest_side_var.set("right")      # OK
+            self.macro_type_var.set("padrão")     # OK
+            self.chest_distance_var.set("1200")   # default: chest_distance: 1200
+            self.auto_reload_var.set(True)        # OK
+            self.auto_focus_var.set(False)        # OK
             self.broken_rod_action_var.set("discard")
+            self.two_rod_mode_var.set(False)      # Modo 2 varas desativado por padrão
             print("[OK] Configurações resetadas para o padrão")
         except Exception as e:
             print(f"[ERROR] Erro ao resetar: {e}")
@@ -5189,22 +5630,393 @@ class FishingBotUI:
             if hasattr(self, 'config_manager') and self.config_manager:
                 self.config_manager.set('chest_side', selected_side)
 
-                # Persistir no arquivo
-                if hasattr(self.config_manager, 'save_config'):
-                    self.config_manager.save_config()
+                # ✅ CORREÇÃO CRÍTICA: Forçar salvamento no user_config mesmo se igual ao default
+                # Bug: _calculate_differences() não salva valores iguais ao default
+                # Solução: Adicionar chest_side diretamente ao user_config antes de salvar
+                self.config_manager.user_config['chest_side'] = selected_side
+                print(f"[CHEST_SIDE] Forçado no user_config: {selected_side}")
+
+                # ✅ CORREÇÃO: Persistir no arquivo usando método correto
+                if self.config_manager.save_user_config():
                     print(f"✅ [CHEST_SIDE] Configuração salva: chest_side = {selected_side}")
+
+                    # Verificar se realmente foi salvo
+                    import json
+                    try:
+                        with open(self.config_manager.user_config_path, 'r') as f:
+                            saved_data = json.load(f)
+                            saved_value = saved_data.get('chest_side', 'NAO_ENCONTRADO')
+                            if saved_value == selected_side:
+                                print(f"✅ [CHEST_SIDE] Verificado no disco: {saved_value}")
+                            else:
+                                print(f"⚠️ [CHEST_SIDE] Valor no disco diferente! Esperado '{selected_side}', encontrado '{saved_value}'")
+                    except Exception as e:
+                        print(f"⚠️ [CHEST_SIDE] Erro ao verificar arquivo: {e}")
 
                     # ✅ CRÍTICO: Recarregar configuração no ChestManager
                     if hasattr(self, 'chest_manager') and self.chest_manager:
                         # ChestManager lerá o novo valor na próxima chamada de get_chest_config()
                         print(f"✅ [CHEST_SIDE] ChestManager usará {selected_side} na próxima operação")
                 else:
-                    print("⚠️ [CHEST_SIDE] ConfigManager sem método save_config")
+                    print("❌ [CHEST_SIDE] Falha ao salvar configuração no disco")
             else:
                 print("⚠️ [CHEST_SIDE] ConfigManager não disponível")
 
         except Exception as e:
             print(f"❌ [CHEST_SIDE] Erro ao salvar: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _apply_initial_tab_visibility(self):
+        """
+        ✅ Aplicar visibilidade inicial das abas baseado nas preferências salvas
+        Chamado após criar todas as abas
+        """
+        try:
+            print("[TAB_VISIBILITY] Aplicando visibilidade inicial das abas...")
+
+            # Mapear chave para nome do texto da aba
+            tab_names = {
+                "control": "🎮 Controle",
+                "feeding": "🍖 Alimentação",
+                "templates": "🎯 Templates",
+                "anti_detection": "🛡️ Anti-Detecção",
+                "viewer": "🐟 Visualizador",
+                "hotkeys": "⌨️ Hotkeys",
+                "arduino": "🔌 Arduino",
+                "help": "❓ Ajuda"
+            }
+
+            for tab_key, frame in self.tab_frames.items():
+                # Verificar se deve ser oculta (só para abas não-essenciais)
+                if tab_key in tab_names:  # Não aplicar para "config"
+                    # Default: templates e viewer ocultas
+                    default_visible = tab_key not in ["templates", "viewer"]
+                    is_visible = self.config_manager.get(f'ui.visible_tabs.{tab_key}', default_visible)
+
+                    if not is_visible:
+                        # Esconder aba
+                        try:
+                            self.notebook.forget(frame)
+                            print(f"   ✅ Aba '{tab_names[tab_key]}' ocultada inicialmente")
+                        except Exception as e:
+                            print(f"   ⚠️ Erro ao ocultar aba '{tab_key}': {e}")
+
+            print("[TAB_VISIBILITY] Visibilidade inicial aplicada!")
+
+        except Exception as e:
+            print(f"❌ [TAB_VISIBILITY] Erro ao aplicar visibilidade inicial: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _on_tab_visibility_change(self, tab_key: str, var):
+        """
+        ✅ REDESENHADO: Reconstrói todas as abas na ordem correta
+
+        Approach: Ao invés de tentar inserir em posição calculada (que falhava),
+        este método REMOVE TODAS AS ABAS e RE-ADICIONA apenas as visíveis
+        na ordem original. É IMPOSSÍVEL falhar com "Slave index out of bounds".
+
+        Args:
+            tab_key: Chave da aba (control, config, feeding, etc)
+            var: BooleanVar do checkbox
+        """
+        try:
+            is_visible = var.get()
+            print(f"[TAB_VISIBILITY] {tab_key}: {'Exibir' if is_visible else 'Ocultar'}")
+
+            # Salvar preferência PRIMEIRO
+            self.config_manager.set(f'ui.visible_tabs.{tab_key}', is_visible)
+            if self.config_manager.save_user_config():
+                print(f"   💾 Preferência salva: ui.visible_tabs.{tab_key} = {is_visible}")
+            else:
+                print(f"   ⚠️ Falha ao salvar preferência")
+
+            # ═══════════════════════════════════════════════════════
+            # RECONSTRUIR TODAS AS ABAS NA ORDEM CORRETA
+            # ═══════════════════════════════════════════════════════
+
+            # Ordem original de criação das abas
+            original_order = ["control", "config", "feeding", "templates",
+                            "anti_detection", "viewer", "hotkeys", "arduino", "help"]
+
+            # Mapear chave para nome do texto da aba
+            tab_names = {
+                "control": "🎮 Controle",
+                "config": "⚙️ Configurações",
+                "feeding": "🍖 Alimentação",
+                "templates": "🎯 Templates",
+                "anti_detection": "🛡️ Anti-Detecção",
+                "viewer": "🐟 Visualizador",
+                "hotkeys": "⌨️ Hotkeys",
+                "arduino": "🔌 Arduino",
+                "help": "❓ Ajuda"
+            }
+
+            # Guardar qual aba estava selecionada (se possível)
+            try:
+                selected_tab_index = self.notebook.index("current")
+                selected_tab_widget = self.notebook.nametowidget(self.notebook.tabs()[selected_tab_index])
+                # Encontrar a chave correspondente
+                selected_key = None
+                for key, frame in self.tab_frames.items():
+                    if frame == selected_tab_widget:
+                        selected_key = key
+                        break
+            except:
+                selected_key = None
+
+            # Remover TODAS as abas do notebook
+            for tab in self.notebook.tabs():
+                try:
+                    self.notebook.forget(tab)
+                except:
+                    pass
+
+            print(f"   🔄 Reconstruindo abas na ordem correta...")
+
+            # Re-adicionar abas na ordem original, apenas as visíveis
+            tabs_added = 0
+            for tab_key_iter in original_order:
+                # Obter frame
+                frame = self.tab_frames.get(tab_key_iter)
+                if frame is None:
+                    continue
+
+                # Verificar se deve estar visível
+                # Config é sempre visível (não tem checkbox)
+                if tab_key_iter == "config":
+                    should_be_visible = True
+                else:
+                    # Obter do checkbox ou da config salva
+                    checkbox_var = self.tab_visibility_vars.get(tab_key_iter)
+                    if checkbox_var:
+                        should_be_visible = checkbox_var.get()
+                    else:
+                        # Fallback: usar config salva
+                        should_be_visible = self.config_manager.get(
+                            f'ui.visible_tabs.{tab_key_iter}',
+                            True  # Default: visível
+                        )
+
+                # Adicionar aba se deve estar visível
+                if should_be_visible:
+                    tab_name = tab_names.get(tab_key_iter, tab_key_iter)
+                    self.notebook.add(frame, text=tab_name)
+                    tabs_added += 1
+                    print(f"      ✅ {tab_name}")
+
+            print(f"   ✅ Reconstrução completa: {tabs_added} abas visíveis")
+
+            # Restaurar seleção (se possível)
+            if selected_key:
+                try:
+                    frame = self.tab_frames.get(selected_key)
+                    if frame:
+                        self.notebook.select(frame)
+                        print(f"   🎯 Aba '{tab_names.get(selected_key)}' re-selecionada")
+                except:
+                    pass
+
+        except Exception as e:
+            print(f"❌ [TAB_VISIBILITY] Erro: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def refresh_stats_and_ranking(self):
+        """
+        🔄 Atualizar estatísticas e ranking do servidor (Thread-Safe)
+        Faz 3 requisições HTTP:
+        1. GET /api/stats/{license_key} - Stats pessoais
+        2. GET /api/ranking/monthly - TOP 5 mensal
+        3. GET /api/ranking/alltime - TOP 5 geral
+        """
+        # ✅ NOVO: Executar em thread separada para não bloquear a UI
+        import threading
+        threading.Thread(target=self._fetch_stats_in_thread, daemon=True).start()
+
+    def _fetch_stats_in_thread(self):
+        """
+        ⚡ Buscar stats em thread separada (chamada por refresh_stats_and_ranking)
+
+        IMPORTANTE: Updates de UI são feitos via root.after() para ser thread-safe
+        """
+        try:
+            print("[STATS] Atualizando estatísticas e ranking...")
+
+            # 1. Obter license_key do license_manager
+            if not hasattr(self, 'license_manager') or not self.license_manager:
+                print("[STATS] ⚠️ License manager não disponível")
+                self.main_window.after(0, lambda: self.stats_username_label.config(text="License manager não disponível"))
+                return
+
+            # ✅ CORREÇÃO: Usar self.license_manager.license_key (atributo agora existe!)
+            license_key = getattr(self.license_manager, 'license_key', None)
+            if not license_key:
+                # Tentar carregar da licença salva
+                print("[STATS] ⚠️ license_key não está em memória, tentando carregar...")
+                license_key = self.license_manager.load_license()
+
+            if not license_key:
+                print("[STATS] ⚠️ License key não encontrada")
+                self.main_window.after(0, lambda: self.stats_username_label.config(text="Não autenticado"))
+                return
+
+            print(f"[STATS] ✅ License key encontrada: {license_key[:10]}...")
+
+            # 2. Obter SERVER_URL (padrão: servidor privado Easypanel)
+            server_url = "https://private-serverpesca.pbzgje.easypanel.host"
+
+            import requests
+
+            # ══════════════════════════════════════════════════════
+            # 1. BUSCAR STATS PESSOAIS
+            # ══════════════════════════════════════════════════════
+            try:
+                stats_url = f"{server_url}/api/stats/{license_key}"
+                print(f"[STATS] Buscando stats em: {stats_url}")
+
+                response = requests.get(stats_url, timeout=10)
+                if response.status_code == 200:
+                    stats = response.json()
+                    print(f"[STATS] ✅ Stats recebidas: {stats}")
+
+                    # ✅ THREAD-SAFE: Atualizar UI via root.after()
+                    def update_stats_ui():
+                        self.stats_username_label.config(text=stats.get('username', _('stats_ranking.na')))
+                        total_fish = stats.get('total_fish', 0)
+                        self.stats_total_label.config(text=f"{total_fish:,}".replace(',', '.'))
+                        month_fish = stats.get('month_fish', 0)
+                        self.stats_month_label.config(text=f"{month_fish:,}".replace(',', '.'))
+                        self.stats_rank_monthly_label.config(text=f"#{stats.get('rank_monthly', 0)}")
+                        self.stats_rank_alltime_label.config(text=f"#{stats.get('rank_alltime', 0)}")
+
+                    self.main_window.after(0, update_stats_ui)
+                else:
+                    print(f"[STATS] ❌ Erro ao buscar stats: HTTP {response.status_code}")
+                    self.main_window.after(0, lambda: self.stats_username_label.config(text=_("stats_ranking.error_loading")))
+
+            except requests.exceptions.Timeout:
+                print("[STATS] ❌ Timeout ao buscar stats")
+                self.main_window.after(0, lambda: self.stats_username_label.config(text=_("stats_ranking.timeout")))
+            except Exception as e:
+                print(f"[STATS] ❌ Erro ao buscar stats: {e}")
+
+            # ══════════════════════════════════════════════════════
+            # 2. BUSCAR RANKING MENSAL
+            # ══════════════════════════════════════════════════════
+            try:
+                monthly_url = f"{server_url}/api/ranking/monthly"
+                print(f"[STATS] Buscando ranking mensal em: {monthly_url}")
+
+                response = requests.get(monthly_url, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    ranking = data.get('ranking', [])
+                    print(f"[STATS] ✅ Ranking mensal recebido: {len(ranking)} entradas")
+
+                    # Montar texto formatado
+                    month_start = data.get('month_start', '')
+                    month_end = data.get('month_end', '')
+
+                    text = f"📅 Período: {month_start} a {month_end}\n\n"
+
+                    if not ranking:
+                        text += "Nenhum usuário pescou este mês ainda."
+                    else:
+                        for entry in ranking:
+                            rank = entry['rank']
+                            username = entry['username']
+                            month_fish = entry['month_fish']
+
+                            # Emojis de medalha
+                            medal = ""
+                            if rank == 1:
+                                medal = "🥇"
+                            elif rank == 2:
+                                medal = "🥈"
+                            elif rank == 3:
+                                medal = "🥉"
+                            else:
+                                medal = f"  {rank}."
+
+                            text += f"{medal} {username:20} - {month_fish:,} peixes\n".replace(',', '.')
+
+                    # ✅ THREAD-SAFE: Atualizar Text widget via root.after()
+                    def update_monthly_ranking():
+                        self.monthly_ranking_text.config(state='normal')
+                        self.monthly_ranking_text.delete('1.0', 'end')
+                        self.monthly_ranking_text.insert('1.0', text)
+                        self.monthly_ranking_text.config(state='disabled')
+
+                    self.main_window.after(0, update_monthly_ranking)
+                else:
+                    print(f"[STATS] ❌ Erro ao buscar ranking mensal: HTTP {response.status_code}")
+
+            except requests.exceptions.Timeout:
+                print("[STATS] ❌ Timeout ao buscar ranking mensal")
+            except Exception as e:
+                print(f"[STATS] ❌ Erro ao buscar ranking mensal: {e}")
+
+            # ══════════════════════════════════════════════════════
+            # 3. BUSCAR RANKING GERAL
+            # ══════════════════════════════════════════════════════
+            try:
+                alltime_url = f"{server_url}/api/ranking/alltime"
+                print(f"[STATS] Buscando ranking geral em: {alltime_url}")
+
+                response = requests.get(alltime_url, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    ranking = data.get('ranking', [])
+                    print(f"[STATS] ✅ Ranking geral recebido: {len(ranking)} entradas")
+
+                    # Montar texto formatado
+                    text = ""
+
+                    if not ranking:
+                        text = "Nenhum usuário pescou ainda."
+                    else:
+                        for entry in ranking:
+                            rank = entry['rank']
+                            username = entry['username']
+                            total_fish = entry['total_fish']
+
+                            # Emojis de medalha
+                            medal = ""
+                            if rank == 1:
+                                medal = "🥇"
+                            elif rank == 2:
+                                medal = "🥈"
+                            elif rank == 3:
+                                medal = "🥉"
+                            else:
+                                medal = f"  {rank}."
+
+                            text += f"{medal} {username:20} - {total_fish:,} peixes\n".replace(',', '.')
+
+                    # ✅ THREAD-SAFE: Atualizar Text widget via root.after()
+                    def update_alltime_ranking():
+                        self.alltime_ranking_text.config(state='normal')
+                        self.alltime_ranking_text.delete('1.0', 'end')
+                        self.alltime_ranking_text.insert('1.0', text)
+                        self.alltime_ranking_text.config(state='disabled')
+
+                    self.main_window.after(0, update_alltime_ranking)
+                else:
+                    print(f"[STATS] ❌ Erro ao buscar ranking geral: HTTP {response.status_code}")
+
+            except requests.exceptions.Timeout:
+                print("[STATS] ❌ Timeout ao buscar ranking geral")
+            except Exception as e:
+                print(f"[STATS] ❌ Erro ao buscar ranking geral: {e}")
+
+            print("[STATS] ✅ Atualização concluída!")
+
+        except Exception as e:
+            print(f"❌ [STATS] Erro geral ao atualizar stats: {e}")
+            import traceback
+            traceback.print_exc()
 
     def test_all_config(self):
         """Testar todas as configurações"""
@@ -5237,11 +6049,11 @@ class FishingBotUI:
                 feeds_value = int(session_count) if session_count.isdigit() else 5
                 print(f"[SAVE] [DEBUG] Salvando feeds_per_session: {feeds_value} (da UI: '{session_count}')")
                 self.config_manager.set('feeding_system.feeds_per_session', feeds_value)
-                
+
                 max_uses = self.feeding_max_uses_var.get()
-                self.config_manager.set('feeding_system.max_uses_per_slot', 
+                self.config_manager.set('feeding_system.max_uses_per_slot',
                                        int(max_uses) if max_uses.isdigit() else 20)
-                
+
                 # Posições
                 self.config_manager.set('coordinates.feeding_positions.slot1', 
                                        [int(self.feeding_slot1_x_var.get()), 
@@ -5255,9 +6067,8 @@ class FishingBotUI:
                                        [int(self.feeding_eat_x_var.get()), 
                                         int(self.feeding_eat_y_var.get())])
                 
-                # Persistir no arquivo
-                if hasattr(self.config_manager, 'save_config'):
-                    self.config_manager.save_config()
+                # ✅ CORREÇÃO: Persistir no arquivo
+                if self.config_manager.save_user_config():
                     print(f"[OK] Configurações de alimentação salvas e persistidas!")
 
                     # ✅ CRÍTICO: Notificar servidor sobre mudanças
@@ -5265,7 +6076,8 @@ class FishingBotUI:
 
                     messagebox.showinfo(_("messages.title_success"), _("messages.feeding_settings_saved"))
                 else:
-                    print("[WARN] ConfigManager sem método save_config")
+                    print("[ERROR] Falha ao salvar configurações de alimentação no disco")
+                    messagebox.showerror("Erro", "Falha ao salvar configurações")
             else:
                 print("[ERROR] ConfigManager não disponível")
                 
@@ -5277,13 +6089,14 @@ class FishingBotUI:
         """Resetar configurações de alimentação para padrão"""
         print("[RELOAD] Resetando configurações de alimentação...")
         try:
+            # ✅ CORRIGIDO: Valores agora batem com default_config.json
             self.feeding_enabled_var.set(True)
             self.feeding_auto_detect_var.set(True)
             self.feeding_trigger_mode_var.set("catches")
-            self.feeding_trigger_catches_var.set("3")
-            self.feeding_trigger_time_var.set("20")
-            self.feeding_session_count_var.set("5")
-            self.feeding_max_uses_var.set("20")
+            self.feeding_trigger_catches_var.set("15")  # default: trigger_catches: 15
+            self.feeding_trigger_time_var.set("20")     # OK
+            self.feeding_session_count_var.set("3")     # default: feeds_per_session: 3
+            self.feeding_max_uses_var.set("20")         # OK
             self.feeding_slot1_x_var.set("1306")
             self.feeding_slot1_y_var.set("858")
             self.feeding_slot2_x_var.set("1403")
@@ -5374,14 +6187,15 @@ class FishingBotUI:
                     self.anti_detection_enabled_var.set(enabled)
                     print(f"[DOC] anti_detection.enabled carregado: {enabled}")
 
-                # Carregar click variation enabled (usar nome correto da variável)
+                # ✅ CORREÇÃO: Carregar click variation enabled
                 click_enabled = self.config_manager.get('anti_detection.click_variation.enabled')
-                if click_enabled is not None and hasattr(self, 'click_variation_enabled'):
-                    self.click_variation_enabled.set(click_enabled)
-                    print(f"[DOC] click_variation.enabled carregado: {click_enabled}")
-                elif click_enabled is not None and hasattr(self, 'click_variation_var'):
-                    self.click_variation_var.set(click_enabled)
-                    print(f"[DOC] click_variation.enabled carregado: {click_enabled}")
+                if click_enabled is not None:
+                    if hasattr(self, 'click_variation_enabled'):
+                        self.click_variation_enabled.set(click_enabled)
+                        print(f"[DOC] click_variation.enabled carregado: {click_enabled}")
+                    elif hasattr(self, 'click_variation_var'):
+                        self.click_variation_var.set(click_enabled)
+                        print(f"[DOC] click_variation.enabled carregado: {click_enabled}")
 
                 # Carregar min_delay
                 min_delay_ms = self.config_manager.get('anti_detection.click_delay_range')
@@ -5393,14 +6207,15 @@ class FishingBotUI:
                         self.click_delay_max_var.set(str(min_delay_ms[1]))
                         print(f"[DOC] click_delay_max carregado: {min_delay_ms[1]}ms")
 
-                # Carregar movement variation enabled (usar nome correto da variável)
-                movement_enabled = self.config_manager.get('anti_detection.movement_variation')
-                if movement_enabled is not None and hasattr(self, 'movement_variation_enabled'):
-                    self.movement_variation_enabled.set(movement_enabled)
-                    print(f"[DOC] movement_variation carregado: {movement_enabled}")
-                elif movement_enabled is not None and hasattr(self, 'movement_variation_var'):
-                    self.movement_variation_var.set(movement_enabled)
-                    print(f"[DOC] movement_variation carregado: {movement_enabled}")
+                # ✅ CORREÇÃO: Carregar movement variation enabled
+                movement_enabled = self.config_manager.get('anti_detection.movement_variation.enabled')
+                if movement_enabled is not None:
+                    if hasattr(self, 'movement_variation_enabled'):
+                        self.movement_variation_enabled.set(movement_enabled)
+                        print(f"[DOC] movement_variation.enabled carregado: {movement_enabled}")
+                    elif hasattr(self, 'movement_variation_var'):
+                        self.movement_variation_var.set(movement_enabled)
+                        print(f"[DOC] movement_variation.enabled carregado: {movement_enabled}")
 
                 # Carregar natural breaks
                 natural_breaks = self.config_manager.get('anti_detection.natural_breaks')
@@ -6200,9 +7015,12 @@ class FishingBotUI:
                 'auto_connect': False  # Por enquanto manual
             }
             
-            # Salvar no config manager
+            # ✅ CORREÇÃO: Salvar no config manager
             self.config_manager.set('arduino', arduino_config)
-            self.log_arduino("💾 Configurações salvas no config.json")
+            if self.config_manager.save_user_config():
+                self.log_arduino("💾 Configurações salvas no config.json")
+            else:
+                self.log_arduino("❌ Falha ao salvar configurações no disco")
             
         except Exception as e:
             self.log_arduino(f"❌ Erro ao salvar config: {e}")
@@ -6214,9 +7032,13 @@ class FishingBotUI:
     
     def load_config_values(self):
         """Carregar valores do config.json para as variáveis da interface"""
+        print("\n" + "="*60)
+        print("[CONFIG_LOAD] Carregando TODAS as configurações da UI...")
+        print("="*60)
         try:
             # Carregar configurações de auto_clean
             auto_clean_config = self.config_manager.get('auto_clean', {})
+            print(f"[CONFIG_LOAD] auto_clean config: {auto_clean_config}")
 
             # ✅ CORREÇÃO: chest_side está no nível ROOT do config, não dentro de auto_clean!
             # Carregar de 'chest_side' em vez de 'auto_clean.chest_side'
@@ -6235,14 +7057,36 @@ class FishingBotUI:
             rod_config = self.config_manager.get('rod_system', {})
             if rod_config:
                 self.broken_rod_action_var.set(rod_config.get('broken_rod_action', 'save'))
-                self.auto_reload_var.set(rod_config.get('auto_replace_broken', True))
+                self.two_rod_mode_var.set(rod_config.get('two_rod_mode', False))
+                # ✅ CORREÇÃO: auto_reload movido para "Opções Adicionais" abaixo
                 
-            # Carregar outras configurações importantes
-            self.cycle_timeout_var.set(str(self.config_manager.get('timeouts.fishing_cycle_timeout', 122)))
-            self.rod_switch_limit_var.set(str(self.config_manager.get('rod_system.rod_switch_limit', 20)))
-            self.clicks_per_second_var.set(str(self.config_manager.get('performance.clicks_per_second', 9)))
-            self.maintenance_timeout_var.set(str(self.config_manager.get('timeouts.maintenance_timeout', 3)))
-            self.chest_distance_var.set(str(self.config_manager.get('chest_distance', 1000)))
+            # ✅ CORRIGIDO: Fallbacks agora batem com default_config.json
+            cycle_timeout = self.config_manager.get('timeouts.fishing_cycle_timeout', 122)   # default: 122
+            rod_switch = self.config_manager.get('rod_system.rod_switch_limit', 20)         # OK
+            clicks_ps = self.config_manager.get('performance.clicks_per_second', 6)         # default: 6
+            maint_timeout = self.config_manager.get('timeouts.maintenance_timeout', 1)      # default: 1
+            chest_dist = self.config_manager.get('chest_distance', 1200)                    # default: 1200
+
+            # ✅ CORREÇÃO: Carregar Opções Adicionais
+            auto_reload = self.config_manager.get('auto_reload', True)   # default: True
+            auto_focus = self.config_manager.get('auto_focus', False)    # default: False
+
+            self.cycle_timeout_var.set(str(cycle_timeout))
+            self.rod_switch_limit_var.set(str(rod_switch))
+            self.clicks_per_second_var.set(str(clicks_ps))
+            self.maintenance_timeout_var.set(str(maint_timeout))
+            self.chest_distance_var.set(str(chest_dist))
+            self.auto_reload_var.set(auto_reload)
+            self.auto_focus_var.set(auto_focus)
+
+            print(f"[CONFIG_LOAD] Configurações gerais carregadas:")
+            print(f"  - Cycle timeout: {cycle_timeout}")
+            print(f"  - Rod switch limit: {rod_switch}")
+            print(f"  - Clicks/second: {clicks_ps}")
+            print(f"  - Maintenance timeout: {maint_timeout}")
+            print(f"  - Chest distance: {chest_dist}")
+            print(f"  - Auto Reload: {auto_reload}")
+            print(f"  - Auto Focus: {auto_focus}")
             
             # Carregar configurações de alimentação
             feeding_config = self.config_manager.get('feeding', {})
@@ -6368,7 +7212,147 @@ class FishingBotUI:
         except Exception as e:
             print(f"Erro ao fechar: {e}")
             self.main_window.destroy()
-    
+
+    def update_license_countdown(self):
+        """Atualizar contagem regressiva do tempo restante da licença"""
+        try:
+            if not self.license_manager or not self.license_manager.is_licensed():
+                return
+
+            if not self.license_countdown_label or self.is_destroyed:
+                return
+
+            # Obter informações da licença
+            license_info = self.license_manager.get_license_info()
+
+            if not license_info:
+                return
+
+            # Calcular tempo restante baseado em expires_at
+            expires_at_str = license_info.get('expires_at')
+
+            if expires_at_str:
+                try:
+                    from datetime import datetime
+
+                    # Parse da data de expiração (formato ISO 8601)
+                    expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+                    now = datetime.now(expires_at.tzinfo)
+
+                    # Calcular diferença
+                    time_remaining = expires_at - now
+
+                    # Converter para dias, horas, minutos e segundos
+                    total_seconds = int(time_remaining.total_seconds())
+
+                    if total_seconds <= 0:
+                        # Licença expirada - FECHAR APLICAÇÃO
+                        self.license_countdown_label.config(
+                            text=_("license.expired_closing"),
+                            fg='#ff4444'
+                        )
+
+                        # Parar bot se estiver rodando
+                        if self.bot_running:
+                            try:
+                                self.stop_bot()
+                            except:
+                                pass
+
+                        # Mostrar mensagem e fechar após 3 segundos
+                        print("\n" + "="*60)
+                        print("❌ LICENÇA EXPIROU DURANTE A EXECUÇÃO!")
+                        print("="*60)
+                        print("⚠️ O bot será fechado automaticamente.")
+                        print("💡 Entre em contato para renovar sua licença.")
+                        print("="*60)
+
+                        # Fechar após 3 segundos
+                        self.main_window.after(3000, self.on_closing)
+                        return  # Não continuar atualizando
+                    else:
+                        days = total_seconds // 86400
+                        hours = (total_seconds % 86400) // 3600
+                        minutes = (total_seconds % 3600) // 60
+                        seconds = total_seconds % 60
+
+                        # Formatar texto baseado no tempo restante
+                        if days > 0:
+                            countdown_text = f"⏰ Licença expira em: {days}d {hours}h {minutes}m {seconds}s"
+                        elif hours > 0:
+                            countdown_text = f"⏰ Licença expira em: {hours}h {minutes}m {seconds}s"
+                        elif minutes > 0:
+                            countdown_text = f"⏰ Licença expira em: {minutes}m {seconds}s"
+                        else:
+                            countdown_text = f"⏰ Licença expira em: {seconds}s"
+
+                        # Mudar cor baseado no tempo restante
+                        if days <= 1:
+                            color = '#ff4444'  # Vermelho se menos de 1 dia
+                        elif days <= 7:
+                            color = '#ffaa00'  # Laranja se menos de 7 dias
+                        else:
+                            color = '#888888'  # Cinza médio ao invés de preto
+
+                        self.license_countdown_label.config(
+                            text=countdown_text,
+                            fg=color
+                        )
+
+                except Exception as e:
+                    print(f"[WARN] Erro ao calcular tempo restante: {e}")
+            else:
+                # Usar days_remaining se expires_at não estiver disponível
+                days_remaining = license_info.get('days_remaining')
+                if days_remaining is not None:
+                    if days_remaining <= 0:
+                        # Licença expirada - FECHAR APLICAÇÃO
+                        self.license_countdown_label.config(
+                            text=_("license.expired_closing"),
+                            fg='#ff4444'
+                        )
+
+                        # Parar bot se estiver rodando
+                        if self.bot_running:
+                            try:
+                                self.stop_bot()
+                            except:
+                                pass
+
+                        # Mostrar mensagem e fechar após 3 segundos
+                        print("\n" + "="*60)
+                        print("❌ LICENÇA EXPIROU DURANTE A EXECUÇÃO!")
+                        print("="*60)
+                        print("⚠️ O bot será fechado automaticamente.")
+                        print("💡 Entre em contato para renovar sua licença.")
+                        print("="*60)
+
+                        # Fechar após 3 segundos
+                        self.main_window.after(3000, self.on_closing)
+                        return  # Não continuar atualizando
+                    else:
+                        countdown_text = f"⏰ Licença expira em: {days_remaining} dias"
+
+                        # Mudar cor baseado no tempo restante
+                        if days_remaining <= 1:
+                            color = '#ff4444'  # Vermelho se menos de 1 dia
+                        elif days_remaining <= 7:
+                            color = '#ffaa00'  # Laranja se menos de 7 dias
+                        else:
+                            color = '#888888'  # Cinza médio ao invés de preto
+
+                        self.license_countdown_label.config(
+                            text=countdown_text,
+                            fg=color
+                        )
+
+            # Atualizar a cada segundo
+            if not self.is_destroyed and hasattr(self, 'main_window'):
+                self.main_window.after(1000, self.update_license_countdown)
+
+        except Exception as e:
+            print(f"[ERROR] Erro ao atualizar contagem regressiva: {e}")
+
     def run(self):
         """Executar interface"""
         try:
