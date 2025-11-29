@@ -1,0 +1,34 @@
+# Node modules (serão instalados no container)
+node_modules/
+
+# Arquivos de ambiente locais
+.env
+.env.local
+
+# Banco de dados local
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+logs/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Documentação
+*.md
+!README_SERVER.md
+
+# Arquivos de desenvolvimento
+*.bat
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
