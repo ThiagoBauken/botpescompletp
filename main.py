@@ -8,10 +8,12 @@ import sys
 import os
 import traceback
 
-# ✅ Adicionar pasta atual ao path (funciona em .exe e Python)
+# ✅ CORREÇÃO: Adicionar pasta atual ao path (funciona em .exe e Python)
 if getattr(sys, 'frozen', False):
     # Rodando como .exe
-    base_dir = os.path.dirname(sys.executable)
+    # ✅ CRÍTICO: usar sys.argv[0] ao invés de sys.executable
+    # sys.executable pode apontar para temp extraído no .exe
+    base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
 else:
     # Rodando como script Python
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -102,6 +104,7 @@ def main():
         try:
             from utils.license_manager import LicenseManager
             from client.credential_manager import CredentialManager
+            # ✅ CORREÇÃO: Usar UnifiedAuthDialog que chama /auth/activate (Python FastAPI)
             from ui.unified_auth_dialog import UnifiedAuthDialog
             from client.server_connector import connect_to_server, register_server_callbacks
 
@@ -142,17 +145,20 @@ def main():
                     safe_print("   ✅ Credenciais sincronizadas!")
 
             else:
-                # ❌ Não autenticado - mostrar dialog unificado UMA VEZ
+                # ❌ Não autenticado - mostrar dialog completo UMA VEZ
                 safe_print("\n🔐 Primeira autenticação necessária...")
                 safe_print("   Por favor, insira suas credenciais:")
 
-                # Mostrar dialog unificado
+                # Mostrar dialog unificado (Login + Senha + License Key)
                 auth_dialog = UnifiedAuthDialog(license_manager)
                 auth_result = auth_dialog.show()
 
                 if not auth_result:
                     safe_print("❌ Autenticação cancelada")
-                    input("Pressione Enter para sair...")
+                    # ✅ CORREÇÃO: Remover input() que trava .exe sem console
+                    # input("Pressione Enter para sair...")
+                    import time
+                    time.sleep(3)  # Delay para usuário ver mensagem
                     return 1
 
                 # Extrair credenciais
@@ -199,7 +205,10 @@ def main():
                     except:
                         pass
 
-                    input("\nPressione Enter para sair...")
+                    # ✅ CORREÇÃO: Remover input() que trava .exe sem console
+                    # input("\nPressione Enter para sair...")
+                    import time
+                    time.sleep(3)
                     return 1
 
                 expires_at_str = license_info.get('expires_at')
@@ -221,7 +230,10 @@ def main():
                             safe_print("")
                             safe_print("💡 Entre em contato para renovar sua licença.")
                             safe_print("="*60)
-                            input("\nPressione Enter para sair...")
+                            # ✅ CORREÇÃO: Remover input() que trava .exe sem console
+                            # input("\nPressione Enter para sair...")
+                            import time
+                            time.sleep(3)
                             return 1
                         else:
                             # Calcular tempo restante
@@ -251,7 +263,10 @@ def main():
                             safe_print("")
                             safe_print("💡 Entre em contato para renovar sua licença.")
                             safe_print("="*60)
-                            input("\nPressione Enter para sair...")
+                            # ✅ CORREÇÃO: Remover input() que trava .exe sem console
+                            # input("\nPressione Enter para sair...")
+                            import time
+                            time.sleep(3)
                             return 1
                         else:
                             safe_print(f"✅ Licença válida! Expira em: {days_remaining} dias")
@@ -266,7 +281,10 @@ def main():
         except Exception as e:
             safe_print(f"❌ Erro na autenticação: {e}")
             traceback.print_exc()
-            input("Pressione Enter para sair...")
+            # ✅ CORREÇÃO: Remover input() que trava .exe sem console
+            # input("Pressione Enter para sair...")
+            import time
+            time.sleep(3)
             return 1
 
         # 2. Sistema de Internacionalização
@@ -325,9 +343,9 @@ def main():
             if license_manager and license_manager.is_licensed() and 'login' in locals():
                 safe_print("\n🌐 Conectando ao servidor multi-usuário...")
 
-                # Ler URL do servidor do config.json
-                server_url = config.get('server.url', 'wss://private-serverpesca.pbzgje.easypanel.host/ws')
-                safe_print(f"   🌐 Servidor: {server_url}")
+                # ✅ URL hardcoded (não exposta nas configs)
+                server_url = os.getenv('SERVER_URL', 'wss://private-serverpesca.pbzgje.easypanel.host/ws')
+                safe_print(f"   🌐 Conectando ao servidor...")
                 safe_print("   ⏳ Aguarde, estabelecendo conexão WebSocket...")
 
                 # Conectar usando as credenciais já coletadas no passo 1
@@ -406,7 +424,10 @@ def main():
     except Exception as e:
         safe_print(f"❌ Erro fatal: {e}")
         traceback.print_exc()
-        input("Pressione Enter para sair...")
+        # ✅ CORREÇÃO: Remover input() que trava .exe sem console
+        # input("Pressione Enter para sair...")
+        import time
+        time.sleep(3)
         return 1
 
 if __name__ == "__main__":
