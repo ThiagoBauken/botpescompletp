@@ -172,19 +172,40 @@ class ChestManager:
             distance = chest_config['distance']
             vertical_offset = chest_config['vertical_offset']
 
-            # Calcular movimento
+            # ✅ CORREÇÃO: Normalizar side para aceitar português e inglês
+            side_normalized = side.lower().strip()
+            if side_normalized in ['left', 'esquerda', 'esq', 'l']:
+                side_normalized = 'left'
+            elif side_normalized in ['right', 'direita', 'dir', 'r']:
+                side_normalized = 'right'
+
+            _safe_print(f"🧭 [CHEST] Lado do baú: '{side}' → normalizado: '{side_normalized}'")
+
+            # Calcular movimento horizontal
             # ✅ CORREÇÃO: Windows SendInput com ALT (freelook) tem eixo X invertido!
             # Movimento POSITIVO = esquerda | Movimento NEGATIVO = direita
-            if side == 'left':
+            if side_normalized == 'left':
                 dx = distance  # Positivo = esquerda
-            elif side == 'right':
+            elif side_normalized == 'right':
                 dx = -distance  # Negativo = direita
             else:
+                _safe_print(f"⚠️ [CHEST] Lado inválido: '{side}' - usando 0")
                 dx = 0
 
-            dy = abs(vertical_offset)  # Sempre positivo (para baixo)
+            # ✅ CORREÇÃO: Garantir que vertical_offset seja aplicado corretamente
+            # Valor positivo = para baixo | Valor negativo = para cima
+            dy = vertical_offset if vertical_offset > 0 else abs(vertical_offset)
 
-            _safe_print(f"📐 [CHEST] Movimento calculado: DX={dx}, DY={dy}")
+            # ✅ AVISO: Verificar se valores são adequados
+            if abs(dx) < 100:
+                _safe_print(f"⚠️ [CHEST] Distance muito pequena: {abs(dx)}px (recomendado: 200-400px)")
+            if dy < 100:
+                _safe_print(f"⚠️ [CHEST] Vertical offset muito pequeno: {dy}px (recomendado: 150-300px)")
+
+            _safe_print(f"📐 [CHEST] Movimento calculado:")
+            _safe_print(f"   Horizontal (DX): {dx:+d} ({'←esquerda' if dx > 0 else '→direita' if dx < 0 else 'nenhum'})")
+            _safe_print(f"   Vertical (DY): {dy:+d} ({'↓baixo' if dy > 0 else '↑cima' if dy < 0 else 'nenhum'})")
+            _safe_print(f"   Config atual: distance={distance}, vertical_offset={vertical_offset}")
 
             if dx != 0 or dy != 0:
                 # ✅ CORREÇÃO: Usar movimento RELATIVO para câmera (não absoluto!)

@@ -64,6 +64,12 @@ class ArduinoInputManager:
         self.lock = threading.RLock()
         self.config_manager = config_manager
 
+        # ✅ CORREÇÃO CRÍTICA: Locks separados para thread-safety (igual InputManager)
+        self.mouse_state_lock = threading.RLock()
+        self.keyboard_state_lock = threading.RLock()
+        self.continuous_actions_lock = threading.RLock()
+        self.threads_lock = threading.RLock()
+
         # Estado interno (para compatibilidade)
         self.keyboard_state = {
             'keys_down': set(),
@@ -95,8 +101,60 @@ class ArduinoInputManager:
         # Carregar configurações se disponível
         self._load_config()
 
-        # NÃO conectar automaticamente no __init__ (UI fará isso)
-        # _connect() será chamado pela UI quando usuário clicar em "Conectar"
+        # ✅ NOVO: Tentar reconectar automaticamente ao último port usado
+        if self.port:
+            _safe_print(f"🔄 Tentando reconectar ao último Arduino usado ({self.port})...")
+            try:
+                if self._connect():
+                    _safe_print(f"✅ Reconectado automaticamente ao {self.port}")
+                else:
+                    _safe_print(f"⚠️ Falha ao reconectar automaticamente - use Conectar na UI")
+            except Exception as e:
+                _safe_print(f"⚠️ Erro ao reconectar automaticamente: {e}")
+
+    # ===== MÉTODOS THREAD-SAFE PARA ACESSO A ESTADOS =====
+
+    def _set_mouse_button_state(self, button: str, pressed: bool):
+        """Thread-safe: Definir estado de botão do mouse"""
+        with self.mouse_state_lock:
+            self.mouse_state[button] = pressed
+
+    def _get_mouse_button_state(self, button: str) -> bool:
+        """Thread-safe: Obter estado de botão do mouse"""
+        with self.mouse_state_lock:
+            return self.mouse_state.get(button, False)
+
+    def _set_mouse_position(self, x: int, y: int):
+        """Thread-safe: Atualizar última posição do mouse"""
+        with self.mouse_state_lock:
+            self.mouse_state['last_position'] = (x, y)
+
+    def _get_mouse_position(self) -> Tuple[int, int]:
+        """Thread-safe: Obter última posição do mouse"""
+        with self.mouse_state_lock:
+            return self.mouse_state['last_position']
+
+    def _set_continuous_action(self, action: str, active: bool):
+        """Thread-safe: Definir estado de ação contínua"""
+        with self.continuous_actions_lock:
+            self.continuous_actions[action] = active
+
+    def _get_continuous_action(self, action: str) -> bool:
+        """Thread-safe: Obter estado de ação contínua"""
+        with self.continuous_actions_lock:
+            return self.continuous_actions.get(action, False)
+
+    def _add_active_thread(self, thread: threading.Thread):
+        """Thread-safe: Adicionar thread à lista de threads ativas"""
+        with self.threads_lock:
+            # ✅ CORREÇÃO: Limpar threads finalizadas antes de adicionar
+            self.active_threads = [t for t in self.active_threads if t.is_alive()]
+            self.active_threads.append(thread)
+
+    def _cleanup_finished_threads(self):
+        """Thread-safe: Remover threads finalizadas da lista (previne memory leak)"""
+        with self.threads_lock:
+            self.active_threads = [t for t in self.active_threads if t.is_alive()]
 
     # ===== MÉTODOS DE CONEXÃO =====
 
@@ -149,6 +207,16 @@ class ArduinoInputManager:
             if self._ping():
                 self.connected = True
                 _safe_print(f"✅ Arduino conectado em {self.port}")
+
+                # ✅ NOVO: Salvar porta na config para reconexão automática
+                if self.config_manager:
+                    try:
+                        self.config_manager.set('arduino_port', self.port)
+                        self.config_manager.save_config()
+                        _safe_print(f"💾 Porta {self.port} salva para reconexão automática")
+                    except Exception as e:
+                        _safe_print(f"⚠️ Não foi possível salvar porta na config: {e}")
+
                 return True
             else:
                 _safe_print("❌ Arduino não respondeu ao PING")
@@ -696,9 +764,9 @@ class ArduinoInputManager:
 
         if success:
             if button == 'left':
-                self.mouse_state['left_button_down'] = True
+                self._set_mouse_button_state('left_button_down', True)
             elif button == 'right':
-                self.mouse_state['right_button_down'] = True
+                self._set_mouse_button_state('right_button_down', True)
 
         return success
 
@@ -710,9 +778,9 @@ class ArduinoInputManager:
 
         if success:
             if button == 'left':
-                self.mouse_state['left_button_down'] = False
+                self._set_mouse_button_state('left_button_down', False)
             elif button == 'right':
-                self.mouse_state['right_button_down'] = False
+                self._set_mouse_button_state('right_button_down', False)
 
         return success
 
@@ -733,10 +801,10 @@ class ArduinoInputManager:
 
         if success:
             if button == 'left':
-                self.mouse_state['left_button_down'] = True
+                self._set_mouse_button_state('left_button_down', True)
             elif button == 'right':
-                self.mouse_state['right_button_down'] = True
-            # _safe_print(f"✅ [REL] Botão {button} pressionado - Estado atualizado: right_down={self.mouse_state.get('right_button_down', False)}")  # ← Log verboso desabilitado
+                self._set_mouse_button_state('right_button_down', True)
+            # _safe_print(f"✅ [REL] Botão {button} pressionado - Estado atualizado: right_down={self._get_mouse_button_state('right_button_down')}")  # ← Log verboso desabilitado
         else:
             _safe_print(f"❌ [REL] Falha ao pressionar botão {button} - Resposta inválida!")
 
@@ -752,9 +820,9 @@ class ArduinoInputManager:
 
         if success:
             if button == 'left':
-                self.mouse_state['left_button_down'] = False
+                self._set_mouse_button_state('left_button_down', False)
             elif button == 'right':
-                self.mouse_state['right_button_down'] = False
+                self._set_mouse_button_state('right_button_down', False)
             # _safe_print(f"✅ [REL] Botão {button} solto")  # ← Log verboso desabilitado
 
         return success
@@ -1144,7 +1212,7 @@ class ArduinoInputManager:
     def start_fishing(self) -> bool:
         """Iniciar pesca - Pressionar e manter botão direito"""
         try:
-            if not self.mouse_state['right_button_down']:
+            if not self._get_mouse_button_state('right_button_down'):
                 if self.mouse_down('right'):
                     _safe_print("🎣 Botão direito pressionado - pesca iniciada")
 
@@ -1163,7 +1231,7 @@ class ArduinoInputManager:
     def stop_fishing(self) -> bool:
         """Parar pesca - Soltar botão direito"""
         try:
-            if self.mouse_state['right_button_down']:
+            if self._get_mouse_button_state('right_button_down'):
                 if self.mouse_up('right'):
                     _safe_print("🎣 Botão direito solto - pesca parada")
 
@@ -1625,11 +1693,11 @@ class ArduinoInputManager:
             _safe_print("   🖱️ Liberando botões do mouse...")
 
             # Liberar botão esquerdo sempre
-            if self.mouse_state['left_button_down']:
+            if self._get_mouse_button_state('left_button_down'):
                 self.mouse_up('left')
 
             # Liberar botão direito apenas se não for para preservar
-            if not preserve_right_click and self.mouse_state['right_button_down']:
+            if not preserve_right_click and self._get_mouse_button_state('right_button_down'):
                 self.mouse_up('right')
             elif preserve_right_click:
                 _safe_print("   ℹ️ Botão direito preservado (pescando)")
@@ -1686,8 +1754,8 @@ class ArduinoInputManager:
 
             # PASSO 5: Limpar estado interno
             _safe_print("🛑 [5/7] Limpando estado interno...")
-            self.mouse_state['right_button_down'] = False
-            self.mouse_state['left_button_down'] = False
+            self._set_mouse_button_state('right_button_down', False)
+            self._set_mouse_button_state('left_button_down', False)
             self.keyboard_state['keys_down'].clear()
             self.keyboard_state['a_pressed'] = False
             self.keyboard_state['d_pressed'] = False
@@ -1750,8 +1818,48 @@ class ArduinoInputManager:
 
     # ===== MÉTODOS DE LIMPEZA =====
 
+    def shutdown(self):
+        """
+        ✅ CORREÇÃO CRÍTICA: Shutdown explícito para liberar recursos
+
+        Deve ser chamado antes de encerrar a aplicação para garantir:
+        - Todas as ações contínuas sejam paradas
+        - Todos os botões sejam liberados
+        - Todas as threads sejam finalizadas
+        - Porta serial seja fechada
+        """
+        try:
+            _safe_print("🔧 ArduinoInputManager: Liberando recursos...")
+
+            # Parar todas as ações
+            self.stop_all_actions()
+
+            # Aguardar threads ativas terminarem (com timeout)
+            with self.threads_lock:
+                threads_to_join = list(self.active_threads)
+
+            _safe_print(f"   ⏳ Aguardando {len(threads_to_join)} threads terminarem...")
+            for thread in threads_to_join:
+                if thread.is_alive():
+                    thread.join(timeout=2.0)  # Timeout de 2s por thread
+
+            # Limpar lista de threads
+            with self.threads_lock:
+                self.active_threads.clear()
+
+            # Fechar porta serial
+            if self.serial and self.serial.is_open:
+                self.serial.close()
+                _safe_print("   🔌 Porta serial fechada")
+
+            self.connected = False
+            _safe_print("✅ ArduinoInputManager: Recursos liberados")
+
+        except Exception as e:
+            _safe_print(f"⚠️ Erro ao liberar recursos: {e}")
+
     def cleanup(self) -> None:
-        """Fechar conexão com Arduino"""
+        """Fechar conexão com Arduino (legacy - usar shutdown())"""
         self.emergency_stop()
 
         if self.serial and self.serial.is_open:
@@ -1763,7 +1871,7 @@ class ArduinoInputManager:
     def __del__(self):
         """Destrutor - garantir limpeza"""
         try:
-            self.cleanup()
+            self.shutdown()
         except:
             pass
 
