@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import mss
 import os
+import sys
 from typing import Optional, Dict, List, Tuple, NamedTuple
 from pathlib import Path
 import time
@@ -76,6 +77,7 @@ class TemplateEngine:
             'filefrito': [1214, 117, 1834, 928],
             'carneurso': [1214, 117, 1834, 928],
             'carnedelobo': [1214, 117, 1834, 928],
+            'yellowperch': [1214, 117, 1834, 928],
             'grub': [1214, 117, 1834, 928],
             'minhoca': [1214, 117, 1834, 928],
 
@@ -85,7 +87,6 @@ class TemplateEngine:
             'herring': [633, 541, 1233, 953],
             'sardine': [633, 541, 1233, 953],
             'anchovy': [633, 541, 1233, 953],
-            'yellowperch': [633, 541, 1233, 953],
 
             # UI pode aparecer em qualquer lugar (tela inteira)
             'inventory': [0, 0, 1920, 1080],
@@ -119,6 +120,32 @@ class TemplateEngine:
         except Exception:
             pass  # Ignorar erros no cleanup
 
+    def shutdown(self):
+        """
+        ✅ CORREÇÃO CRÍTICA: Shutdown explícito para liberar recursos
+
+        Deve ser chamado antes de encerrar a aplicação para garantir
+        cleanup adequado de MSS instances e outros recursos.
+        """
+        try:
+            _safe_print("🔧 TemplateEngine: Liberando recursos...")
+
+            # Fechar MSS instance da thread atual
+            if hasattr(self._mss_instances, 'instance') and self._mss_instances.instance is not None:
+                self._mss_instances.instance.close()
+                self._mss_instances.instance = None
+                _safe_print("   ✅ MSS instance fechada")
+
+            # Limpar cache de templates (opcional, libera memória)
+            if hasattr(self, 'template_cache'):
+                self.template_cache.clear()
+                _safe_print("   ✅ Template cache limpo")
+
+            _safe_print("✅ TemplateEngine: Recursos liberados com sucesso")
+
+        except Exception as e:
+            _safe_print(f"⚠️ Erro ao liberar recursos do TemplateEngine: {e}")
+
     def _init_screen_capture(self):
         """Inicializar captura de tela otimizada (do botpesca.py)"""
         try:
@@ -139,12 +166,60 @@ class TemplateEngine:
             self.screen_capture = None
     
     def _load_templates(self):
-        """Carregar todos os templates da pasta templates/"""
+        """
+        Carregar todos os templates da pasta templates/
+
+        ✅ CORREÇÃO: Funciona tanto em Python quanto em .exe compilado
+        """
         try:
-            templates_dir = Path(__file__).parent.parent / "templates"
+            # ✅ Detectar se está rodando como .exe ou script Python
+            if getattr(sys, 'frozen', False):
+                # Rodando como .exe compilado (Nuitka/PyInstaller)
+
+                # ESTRATÉGIA: Tentar múltiplos caminhos até encontrar templates
+                possible_paths = []
+
+                # 1. Nuitka: Diretório do executável (templates ao lado do .exe)
+                exe_dir = Path(sys.argv[0]).parent.resolve()
+                possible_paths.append(exe_dir)
+
+                # 2. PyInstaller: sys._MEIPASS (templates extraídos em temp)
+                if hasattr(sys, '_MEIPASS'):
+                    possible_paths.append(Path(sys._MEIPASS))
+
+                # 3. Nuitka onefile: Diretório temporário de extração
+                # Nuitka extrai para uma pasta temp, geralmente contém o executável original
+                if hasattr(sys, 'executable'):
+                    possible_paths.append(Path(sys.executable).parent)
+
+                # Tentar cada caminho até encontrar templates/
+                base_dir = None
+                for path in possible_paths:
+                    test_dir = path / "templates"
+                    if test_dir.exists():
+                        base_dir = path
+                        _safe_print(f"📁 Templates encontrados em: {base_dir}")
+                        break
+
+                if base_dir is None:
+                    # Fallback: usar diretório do .exe
+                    base_dir = exe_dir
+                    _safe_print(f"⚠️ Templates não encontrados, usando: {base_dir}")
+            else:
+                # Rodando como script Python
+                base_dir = Path(__file__).parent.parent
+
+            templates_dir = base_dir / "templates"
 
             if not templates_dir.exists():
                 _safe_print(f"⚠️ Pasta templates não encontrada: {templates_dir}")
+                _safe_print(f"   Caminhos testados:")
+                if getattr(sys, 'frozen', False):
+                    _safe_print(f"   • {Path(sys.argv[0]).parent.resolve()}/templates")
+                    if hasattr(sys, '_MEIPASS'):
+                        _safe_print(f"   • {Path(sys._MEIPASS)}/templates")
+                    if hasattr(sys, 'executable'):
+                        _safe_print(f"   • {Path(sys.executable).parent}/templates")
                 return
 
             template_files = list(templates_dir.glob("*.png"))
@@ -191,13 +266,28 @@ class TemplateEngine:
             _safe_print(f"❌ Erro ao carregar templates: {e}")
 
     def _load_single_template(self, template_name: str) -> bool:
-        """Carregar um template individual quando não encontrado no cache"""
+        """
+        Carregar um template individual quando não encontrado no cache
+
+        ✅ CORREÇÃO: Funciona tanto em Python quanto em .exe compilado
+        """
         try:
-            # Verificar múltiplos locais de templates
+            # ✅ Detectar se está rodando como .exe ou script Python
+            if getattr(sys, 'frozen', False):
+                # Rodando como .exe compilado
+                if hasattr(sys, '_MEIPASS'):
+                    # ✅ Nuitka --onefile com --include-data-dir: templates DENTRO
+                    base_dir = Path(sys._MEIPASS)
+                else:
+                    # ✅ Nuitka sem --include-data-dir: templates FORA (ao lado do .exe)
+                    base_dir = Path(sys.argv[0]).parent.resolve()
+            else:
+                # Rodando como script Python
+                base_dir = Path(__file__).parent.parent
+
+            # ✅ CORREÇÃO CRÍTICA: Usar apenas path relativo (funciona DENTRO e FORA)
             possible_paths = [
-                Path(__file__).parent.parent / "templates" / f"{template_name}.png",
-                Path("D:/finalbot/fishing_bot_v4/templates") / f"{template_name}.png",
-                Path("D:/finalbot/templates") / f"{template_name}.png"
+                base_dir / "templates" / f"{template_name}.png",
             ]
 
             for template_path in possible_paths:
@@ -710,11 +800,12 @@ class TemplateEngine:
                 # Fallback para prioridades padrão
                 bait_templates = [
                     'carne de crocodilo', # Prioridade 1
-                    'carne de urso',      # Prioridade 2  
+                    'carne de urso',      # Prioridade 2
                     'carne de lobo',      # Prioridade 3
                     'trout',              # Prioridade 4
-                    'grub',               # Prioridade 5
-                    'worm'                # Prioridade 6
+                    'yellowperch',        # Prioridade 5
+                    'grub',               # Prioridade 6
+                    'worm'                # Prioridade 7
                 ]
             
             # Detectar apenas templates que existem
