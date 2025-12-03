@@ -1,7 +1,7 @@
 {
   "language": "en",
   "template_confidence": {
-    "catch": 0.75,
+    "catch": 0.92,
     "enbausi": 0.79,
     "inventory": 0.9,
     "carneurso": 0.75,
