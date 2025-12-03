@@ -631,26 +631,32 @@ class ChestOperationCoordinator:
             # PASSO 3: Calcular deslocamento
             _safe_print("[3/5] Calculando movimento da câmera...")
 
-            # ✅ CORREÇÃO: Comportamento real confirmado pelo usuário
-            # Negativo = esquerda | Positivo = direita
+            # ✅ CRÍTICO: MESMA LÓGICA DO chest_manager.py!
+            # Windows SendInput com ALT (freelook) tem eixo X invertido:
+            # Movimento POSITIVO = esquerda | Movimento NEGATIVO = direita
             if chest_side == 'left':
-                delta_x = -chest_distance  # NEGATIVO = esquerda
-            else:
-                delta_x = chest_distance   # POSITIVO = direita
+                delta_x = chest_distance  # POSITIVO = esquerda
+                _safe_print(f"   🧭 LEFT detectado → delta_x = +{chest_distance} (POSITIVO = esquerda)")
+            else:  # right
+                delta_x = -chest_distance  # NEGATIVO = direita
+                _safe_print(f"   🧭 RIGHT detectado → delta_x = -{chest_distance} (NEGATIVO = direita)")
 
             dy = abs(chest_vertical_offset)  # Sempre positivo = para baixo
 
-            # ✅ AVISO: Verificar se valores são adequados
-            if abs(delta_x) < 100:
-                _safe_print(f"⚠️ [CHEST_COORD] chest_distance muito pequena: {abs(delta_x)}px (recomendado: 200-400px)")
-            if abs(delta_x) > 600:
-                _safe_print(f"⚠️ [CHEST_COORD] chest_distance muito grande: {abs(delta_x)}px (recomendado: 200-400px)")
+            # ✅ AVISO: Verificar se valores são adequados (varia por sensibilidade do mouse no jogo)
+            if abs(delta_x) < 200:
+                _safe_print(f"⚠️ [CHEST_COORD] chest_distance muito pequena: {abs(delta_x)}px")
+                _safe_print(f"   💡 SUGESTÃO: Aumentar chest_distance (sensibilidade baixa: 800-1250px)")
+            if abs(delta_x) > 2000:
+                _safe_print(f"⚠️ [CHEST_COORD] chest_distance muito grande: {abs(delta_x)}px")
+                _safe_print(f"   💡 SUGESTÃO: Diminuir chest_distance (valores típicos: 300-1250px)")
             if dy < 100:
-                _safe_print(f"⚠️ [CHEST_COORD] chest_vertical_offset muito pequeno: {dy}px (recomendado: 150-300px)")
+                _safe_print(f"⚠️ [CHEST_COORD] chest_vertical_offset muito pequeno: {dy}px (recomendado: 150-250px)")
 
             _safe_print(f"📐 [CHEST_COORD] Movimento calculado:")
-            _safe_print(f"   Horizontal (DX): {delta_x:+d} ({'←esquerda' if delta_x < 0 else '→direita' if delta_x > 0 else 'nenhum'})")
+            _safe_print(f"   Horizontal (DX): {delta_x:+d} ({'←esquerda' if delta_x > 0 else '→direita' if delta_x < 0 else 'nenhum'})")
             _safe_print(f"   Vertical (DY): {dy:+d} ({'↓baixo' if dy > 0 else '↑cima' if dy < 0 else 'nenhum'})")
+            _safe_print(f"   💡 LEMBRE-SE: Positivo = esquerda, Negativo = direita (eixo X invertido no freelook)")
 
             # PASSO 4: Movimento da câmera via ARDUINO
             _safe_print("\n[4/5] === MOVENDO CÂMERA ===")
