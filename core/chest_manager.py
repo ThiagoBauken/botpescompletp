@@ -192,18 +192,21 @@ class ChestManager:
             _safe_print(f"   distance: {distance}")
             _safe_print(f"   vertical_offset: {vertical_offset}")
 
-            # ✅ CORREÇÃO: Normalizar side para aceitar português e inglês
+            # ✅ CORREÇÃO: Normalizar side (aceitar TODOS os idiomas: PT, EN, ES, RU, ZH)
             side_normalized = side.lower().strip()
             _safe_print(f"   side após .lower().strip(): '{side_normalized}'")
 
-            if side_normalized in ['left', 'esquerda', 'esq', 'l']:
+            # LEFT: PT=esquerdo, EN=left, ES=izquierdo, RU=левый, ZH=左
+            if side_normalized in ['left', 'esquerdo', 'esquerda', 'esq', 'l', 'izquierdo', 'левый', '左']:
                 side_normalized = 'left'
                 _safe_print(f"   ✅ Matched como LEFT")
-            elif side_normalized in ['right', 'direita', 'dir', 'r']:
+            # RIGHT: PT=direito/direita, EN=right, ES=derecho, RU=правый, ZH=右
+            elif side_normalized in ['right', 'direito', 'direita', 'dir', 'r', 'derecho', 'правый', '右']:
                 side_normalized = 'right'
                 _safe_print(f"   ✅ Matched como RIGHT")
             else:
-                _safe_print(f"   ❌ NÃO MATCHED! Usando fallback...")
+                _safe_print(f"   ❌ NÃO MATCHED '{side}'! Usando fallback 'right'")
+                side_normalized = 'right'
 
             _safe_print(f"🧭 [CHEST] Lado do baú: '{side}' → normalizado: '{side_normalized}'")
 

@@ -290,8 +290,9 @@ class ChestOperationCoordinator:
                     return
 
                 # PASSO 2: Aguardar carregamento
+                # ✅ OTIMIZAÇÃO: Reduzido de 1.5s para 0.8s (detecção ativa nas operações individuais)
                 _safe_print("⏳ PASSO 2: Aguardando carregamento dos itens...")
-                time.sleep(1.5)
+                time.sleep(0.8)
 
                 # PASSO 3: Executar todas as operações em ordem de prioridade
                 _safe_print("🔄 PASSO 3: Executando operações...")
@@ -323,10 +324,10 @@ class ChestOperationCoordinator:
                     # ✅ CORREÇÃO BUG #1: Delay entre operações (CRÍTICO para estabilidade!)
                     # Quando feeding falha rapidamente (< 0.5s), cleaning executa IMEDIATAMENTE depois
                     # Isso não dá tempo para UI/screenshot estabilizar, causando falha no cleaning
-                    # Solução: Aguardar 1.5s entre operações para garantir estabilização
+                    # ✅ OTIMIZAÇÃO: Reduzido de 1.5s para 1.0s (ainda seguro mas mais rápido)
                     if i < len(operations_to_execute) - 1:  # Não fazer delay após última operação
-                        _safe_print(f"   ⏳ Aguardando 1.5s antes da próxima operação...")
-                        time.sleep(1.5)  # Dar tempo para UI/screenshot estabilizar
+                        _safe_print(f"   ⏳ Aguardando 1.0s antes da próxima operação...")
+                        time.sleep(1.0)  # Dar tempo para UI/screenshot estabilizar
 
                     # ✅ REMOVIDO: NÃO soltar ALT após cada operação!
                     # ALT deve ficar pressionado durante FEEDING e MAINTENANCE
@@ -444,8 +445,18 @@ class ChestOperationCoordinator:
                     if self.rod_maintenance_system:
                         rod_manager = getattr(self.rod_maintenance_system, 'rod_manager', None)
                         if rod_manager and hasattr(rod_manager, 'equip_next_rod_after_chest'):
+                            # ✅ CORREÇÃO MODO 2 VARAS: Verificar se operação inclui MAINTENANCE
+                            # Se SIM e ambas varas têm isca → humano trocou vara → swap para outra
+                            has_maintenance = any(op.operation_type == OperationType.MAINTENANCE
+                                                 for op in operations_to_execute)
+
+                            if has_maintenance:
+                                _safe_print("   🔧 Operação de manutenção detectada - verificará status das varas")
+
                             _safe_print("   🎯 Chamando equip_next_rod_after_chest()...")
-                            success = rod_manager.equip_next_rod_after_chest()
+                            success = rod_manager.equip_next_rod_after_chest(
+                                check_both_rods_have_bait=has_maintenance
+                            )
                             _safe_print(f"   📊 Resultado: {'✅ Sucesso' if success else '❌ Falhou'}")
                         else:
                             _safe_print("   ⚠️ equip_next_rod_after_chest() não disponível - usando vara removida")
@@ -522,10 +533,35 @@ class ChestOperationCoordinator:
         _safe_print("🛡️ [SAFETY] Fail-safe do PyAutoGUI desabilitado temporariamente")
 
         try:
-            # Usar configurações exatas do v3
-            chest_side = self.config_manager.get('chest_side', 'left') if self.config_manager else 'left'
-            chest_distance = self.config_manager.get('chest_distance', 1200) if self.config_manager else 1200
-            _safe_print(f"Config: lado={chest_side}, distância={chest_distance}px")
+            # ✅ CORREÇÃO: Usar default 'right' (consistente com default_config.json)
+            chest_side_raw = self.config_manager.get('chest_side', 'right') if self.config_manager else 'right'
+            chest_distance = self.config_manager.get('chest_distance', 300) if self.config_manager else 300
+            chest_vertical_offset = self.config_manager.get('chest_vertical_offset', 200) if self.config_manager else 200
+
+            _safe_print(f"")
+            _safe_print(f"🔍 [DEBUG] Config ANTES de normalizar:")
+            _safe_print(f"   chest_side RAW: '{chest_side_raw}' (tipo: {type(chest_side_raw).__name__})")
+            _safe_print(f"   chest_distance: {chest_distance}")
+            _safe_print(f"   chest_vertical_offset: {chest_vertical_offset}")
+
+            # ✅ CORREÇÃO: Normalizar side (aceitar TODOS os idiomas: PT, EN, ES, RU, ZH)
+            chest_side_normalized = str(chest_side_raw).lower().strip()
+            _safe_print(f"   side após .lower().strip(): '{chest_side_normalized}'")
+
+            # LEFT: PT=esquerdo, EN=left, ES=izquierdo, RU=левый, ZH=左
+            if chest_side_normalized in ['left', 'esquerdo', 'esquerda', 'esq', 'l', 'izquierdo', 'левый', '左']:
+                chest_side = 'left'
+                _safe_print(f"   ✅ Matched como LEFT")
+            # RIGHT: PT=direito/direita, EN=right, ES=derecho, RU=правый, ZH=右
+            elif chest_side_normalized in ['right', 'direito', 'direita', 'dir', 'r', 'derecho', 'правый', '右']:
+                chest_side = 'right'
+                _safe_print(f"   ✅ Matched como RIGHT")
+            else:
+                _safe_print(f"   ❌ NÃO MATCHED '{chest_side_raw}'! Usando fallback 'right'")
+                chest_side = 'right'
+
+            _safe_print(f"🧭 [CHEST_COORD] Lado FINAL: '{chest_side}' (normalizado de '{chest_side_raw}')")
+            _safe_print(f"")
 
             # ✅ REMOVIDO: SAFETY preventivo de ALT (desnecessário - vamos pressionar ALT em seguida)
             # Se houvesse ALT preso, o fishing_engine já teria limpado ao parar
@@ -595,21 +631,29 @@ class ChestOperationCoordinator:
             # PASSO 3: Calcular deslocamento
             _safe_print("[3/5] Calculando movimento da câmera...")
 
-            # ✅ CORREÇÃO: Windows SendInput com ALT tem eixo X invertido!
-            # Positivo = esquerda | Negativo = direita
+            # ✅ CORREÇÃO: Comportamento real confirmado pelo usuário
+            # Negativo = esquerda | Positivo = direita
             if chest_side == 'left':
-                delta_x = chest_distance   # POSITIVO = esquerda
+                delta_x = -chest_distance  # NEGATIVO = esquerda
             else:
-                delta_x = -chest_distance  # NEGATIVO = direita
+                delta_x = chest_distance   # POSITIVO = direita
 
-            _safe_print(f"   Movimento: {chest_side} → {delta_x}px")
+            dy = abs(chest_vertical_offset)  # Sempre positivo = para baixo
+
+            # ✅ AVISO: Verificar se valores são adequados
+            if abs(delta_x) < 100:
+                _safe_print(f"⚠️ [CHEST_COORD] chest_distance muito pequena: {abs(delta_x)}px (recomendado: 200-400px)")
+            if abs(delta_x) > 600:
+                _safe_print(f"⚠️ [CHEST_COORD] chest_distance muito grande: {abs(delta_x)}px (recomendado: 200-400px)")
+            if dy < 100:
+                _safe_print(f"⚠️ [CHEST_COORD] chest_vertical_offset muito pequeno: {dy}px (recomendado: 150-300px)")
+
+            _safe_print(f"📐 [CHEST_COORD] Movimento calculado:")
+            _safe_print(f"   Horizontal (DX): {delta_x:+d} ({'←esquerda' if delta_x < 0 else '→direita' if delta_x > 0 else 'nenhum'})")
+            _safe_print(f"   Vertical (DY): {dy:+d} ({'↓baixo' if dy > 0 else '↑cima' if dy < 0 else 'nenhum'})")
 
             # PASSO 4: Movimento da câmera via ARDUINO
             _safe_print("\n[4/5] === MOVENDO CÂMERA ===")
-
-            # Configuração vertical igual ao v3
-            chest_vertical = self.config_manager.get('chest_vertical_offset', 200) if self.config_manager else 200
-            dy = abs(chest_vertical)
 
             _safe_print(f"   📐 Delta calculado: DX={delta_x}, DY={dy}")
             _safe_print(f"   📊 InputManager tem move_camera_windows_style? {hasattr(self.input_manager, 'move_camera_windows_style') if self.input_manager else False}")
