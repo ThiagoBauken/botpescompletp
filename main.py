@@ -249,13 +249,63 @@ def main():
                             safe_print("⚠️ Sua licença expirou e o bot não pode ser iniciado.")
                             safe_print(f"📅 Data de expiração: {expires_at_str}")
                             safe_print("")
-                            safe_print("💡 Entre em contato para renovar sua licença.")
+                            safe_print("🔄 Abrindo dialog para renovação da licença...")
                             safe_print("="*60)
-                            # ✅ CORREÇÃO: Remover input() que trava .exe sem console
-                            # input("\nPressione Enter para sair...")
+
+                            # ✅ RENOVAÇÃO AUTOMÁTICA: Limpar licença expirada e pedir nova
                             import time
-                            time.sleep(3)
-                            return 1
+                            time.sleep(2)
+
+                            # Remover licença expirada
+                            try:
+                                if os.path.exists(license_manager.license_file):
+                                    os.remove(license_manager.license_file)
+                                    safe_print("🗑️ Licença expirada removida.")
+                            except:
+                                pass
+
+                            # Limpar credenciais salvas
+                            cred_manager.delete_credentials()
+                            safe_print("🗑️ Credenciais antigas removidas.")
+
+                            # Mostrar dialog de renovação
+                            safe_print("\n🔐 Por favor, insira sua nova licença:")
+                            auth_dialog = AuthDialog(license_manager, cred_manager)
+                            auth_result = auth_dialog.show()
+
+                            # Verificar se usuário cancelou
+                            if not auth_result:
+                                safe_print("❌ Renovação cancelada pelo usuário")
+                                time.sleep(3)
+                                return 1
+
+                            # Verificar se servidor autorizou
+                            if not auth_result.get('authenticated', False):
+                                safe_print("❌ Nova licença rejeitada pelo servidor")
+                                safe_print("   Motivo: Chave inválida, expirada ou não ativada")
+                                time.sleep(5)
+                                return 1
+
+                            # ✅ Renovação bem-sucedida!
+                            safe_print("✅ Licença renovada com sucesso!")
+
+                            # Atualizar variáveis para continuar execução
+                            login = auth_result['login']
+                            password = auth_result['password']
+                            license_key = auth_result['license_key']
+                            remember = auth_result['remember']
+
+                            # Salvar novas credenciais se solicitado
+                            if remember:
+                                safe_print("   💾 Salvando novas credenciais...")
+                                cred_manager.save_credentials(
+                                    username=login,
+                                    password=password,
+                                    license_key=license_key
+                                )
+
+                            safe_print("🎉 Bot pode continuar com a nova licença!")
+                            time.sleep(2)
                         else:
                             # Calcular tempo restante
                             time_remaining = expires_at - now
@@ -282,13 +332,63 @@ def main():
                             safe_print("⚠️ Sua licença expirou e o bot não pode ser iniciado.")
                             safe_print(f"📅 Dias restantes: {days_remaining}")
                             safe_print("")
-                            safe_print("💡 Entre em contato para renovar sua licença.")
+                            safe_print("🔄 Abrindo dialog para renovação da licença...")
                             safe_print("="*60)
-                            # ✅ CORREÇÃO: Remover input() que trava .exe sem console
-                            # input("\nPressione Enter para sair...")
+
+                            # ✅ RENOVAÇÃO AUTOMÁTICA: Limpar licença expirada e pedir nova
                             import time
-                            time.sleep(3)
-                            return 1
+                            time.sleep(2)
+
+                            # Remover licença expirada
+                            try:
+                                if os.path.exists(license_manager.license_file):
+                                    os.remove(license_manager.license_file)
+                                    safe_print("🗑️ Licença expirada removida.")
+                            except:
+                                pass
+
+                            # Limpar credenciais salvas
+                            cred_manager.delete_credentials()
+                            safe_print("🗑️ Credenciais antigas removidas.")
+
+                            # Mostrar dialog de renovação
+                            safe_print("\n🔐 Por favor, insira sua nova licença:")
+                            auth_dialog = AuthDialog(license_manager, cred_manager)
+                            auth_result = auth_dialog.show()
+
+                            # Verificar se usuário cancelou
+                            if not auth_result:
+                                safe_print("❌ Renovação cancelada pelo usuário")
+                                time.sleep(3)
+                                return 1
+
+                            # Verificar se servidor autorizou
+                            if not auth_result.get('authenticated', False):
+                                safe_print("❌ Nova licença rejeitada pelo servidor")
+                                safe_print("   Motivo: Chave inválida, expirada ou não ativada")
+                                time.sleep(5)
+                                return 1
+
+                            # ✅ Renovação bem-sucedida!
+                            safe_print("✅ Licença renovada com sucesso!")
+
+                            # Atualizar variáveis para continuar execução
+                            login = auth_result['login']
+                            password = auth_result['password']
+                            license_key = auth_result['license_key']
+                            remember = auth_result['remember']
+
+                            # Salvar novas credenciais se solicitado
+                            if remember:
+                                safe_print("   💾 Salvando novas credenciais...")
+                                cred_manager.save_credentials(
+                                    username=login,
+                                    password=password,
+                                    license_key=license_key
+                                )
+
+                            safe_print("🎉 Bot pode continuar com a nova licença!")
+                            time.sleep(2)
                         else:
                             safe_print(f"✅ Licença válida! Expira em: {days_remaining} dias")
 
