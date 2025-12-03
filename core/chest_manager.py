@@ -82,11 +82,25 @@ class ChestManager:
         
     def get_chest_config(self) -> Dict[str, Any]:
         """Obter configurações atuais do baú"""
+        # ✅ DEBUG: Log detalhado dos valores lidos
+        side_value = self.config_manager.get('chest_side', 'left')
+        distance_value = self.config_manager.get('chest_distance', 300)
+        vertical_value = self.config_manager.get('chest_vertical_offset', 200)
+        macro_value = self.config_manager.get('macro_type', 'standard')
+
+        _safe_print(f"")
+        _safe_print(f"🔍 [DEBUG] get_chest_config() retornando:")
+        _safe_print(f"   chest_side: '{side_value}' (tipo: {type(side_value).__name__})")
+        _safe_print(f"   chest_distance: {distance_value}")
+        _safe_print(f"   chest_vertical_offset: {vertical_value}")
+        _safe_print(f"   macro_type: '{macro_value}'")
+        _safe_print(f"")
+
         return {
-            'side': self.config_manager.get('chest_side', 'left'),
-            'distance': self.config_manager.get('chest_distance', 300),
-            'vertical_offset': self.config_manager.get('chest_vertical_offset', 200),
-            'macro_type': self.config_manager.get('macro_type', 'standard')
+            'side': side_value,
+            'distance': distance_value,
+            'vertical_offset': vertical_value,
+            'macro_type': macro_value
         }
     
     def ensure_initial_camera_position(self) -> bool:
@@ -172,12 +186,24 @@ class ChestManager:
             distance = chest_config['distance']
             vertical_offset = chest_config['vertical_offset']
 
+            _safe_print(f"")
+            _safe_print(f"🔍 [DEBUG] execute_camera_movement() recebeu:")
+            _safe_print(f"   side ORIGINAL: '{side}' (tipo: {type(side).__name__}, len: {len(str(side))})")
+            _safe_print(f"   distance: {distance}")
+            _safe_print(f"   vertical_offset: {vertical_offset}")
+
             # ✅ CORREÇÃO: Normalizar side para aceitar português e inglês
             side_normalized = side.lower().strip()
+            _safe_print(f"   side após .lower().strip(): '{side_normalized}'")
+
             if side_normalized in ['left', 'esquerda', 'esq', 'l']:
                 side_normalized = 'left'
+                _safe_print(f"   ✅ Matched como LEFT")
             elif side_normalized in ['right', 'direita', 'dir', 'r']:
                 side_normalized = 'right'
+                _safe_print(f"   ✅ Matched como RIGHT")
+            else:
+                _safe_print(f"   ❌ NÃO MATCHED! Usando fallback...")
 
             _safe_print(f"🧭 [CHEST] Lado do baú: '{side}' → normalizado: '{side_normalized}'")
 
