@@ -101,34 +101,11 @@ class ArduinoInputManager:
         # Carregar configurações se disponível
         self._load_config()
 
-        # ✅ NOVO: Tentar reconectar automaticamente ao último port usado
+        # ✅ CORREÇÃO: NÃO tentar conectar automaticamente aqui!
+        # Motivo: Bloqueia inicialização e compete com UI
+        # A UI vai tentar conectar DEPOIS de tudo pronto (via _auto_refresh_arduino_on_startup)
         if self.port:
-            _safe_print(f"🔄 Tentando reconectar ao último Arduino usado ({self.port})...")
-            try:
-                # ✅ CORREÇÃO: Garantir que porta está fechada antes de tentar abrir
-                if self.serial and self.serial.is_open:
-                    try:
-                        self.serial.close()
-                        _safe_print(f"   🔒 Porta anterior fechada")
-                    except:
-                        pass
-
-                # Tentar conectar
-                if self._connect():
-                    _safe_print(f"✅ Reconectado automaticamente ao {self.port}")
-                else:
-                    _safe_print(f"⚠️ Falha ao reconectar automaticamente - use Conectar na UI")
-            except serial.SerialException as e:
-                # ✅ CORREÇÃO: Se der PermissionError, limpar serial e avisar
-                if "Access is denied" in str(e) or "PermissionError" in str(e):
-                    _safe_print(f"⚠️ Porta {self.port} bloqueada - desconecte e reconecte o Arduino")
-                    _safe_print(f"   Depois clique em 'Conectar' na aba Arduino")
-                    self.serial = None
-                    self.connected = False
-                else:
-                    _safe_print(f"⚠️ Erro ao reconectar: {e}")
-            except Exception as e:
-                _safe_print(f"⚠️ Erro ao reconectar automaticamente: {e}")
+            _safe_print(f"   📌 Última porta usada: {self.port} (conexão será feita pela UI)")
 
     # ===== MÉTODOS THREAD-SAFE PARA ACESSO A ESTADOS =====
 
