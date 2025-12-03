@@ -248,10 +248,27 @@ class ArduinoInputManager:
                 return True
             else:
                 _safe_print("❌ Arduino não respondeu ao PING")
+                # ✅ CRÍTICO: Fechar porta se PING falhou (evita PermissionError nas próximas tentativas)
+                try:
+                    if self.serial and self.serial.is_open:
+                        self.serial.close()
+                        _safe_print("   🔒 Porta fechada (PING falhou)")
+                except:
+                    pass
+                self.serial = None
+                self.connected = False
                 return False
 
         except serial.SerialException as e:
             _safe_print(f"❌ Erro ao conectar: {e}")
+            # ✅ CRÍTICO: Fechar porta se erro ao conectar
+            try:
+                if self.serial and self.serial.is_open:
+                    self.serial.close()
+            except:
+                pass
+            self.serial = None
+            self.connected = False
             return False
 
     def _find_arduino_port(self) -> Optional[str]:
