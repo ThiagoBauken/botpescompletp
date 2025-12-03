@@ -453,13 +453,25 @@ class FishingEngine:
             return False
     
     def pause(self) -> bool:
-        """Pausar/Despausar sistema de pesca"""
+        """Pausar/Despausar sistema de pesca (thread-safe com debounce)"""
         try:
-            if not self.is_running:
-                _safe_print("⚠️ Sistema de pesca não está rodando")
-                return False
+            # ✅ CORREÇÃO: Usar lock para evitar race condition ao apertar F10 múltiplas vezes
+            with self.command_lock:
+                if not self.is_running:
+                    _safe_print("⚠️ Sistema de pesca não está rodando")
+                    return False
 
-            self.is_paused = not self.is_paused
+                # ✅ DEBOUNCE: Verificar se última pausa foi há menos de 0.3s
+                current_time = time.time()
+                if hasattr(self, '_last_pause_time'):
+                    time_since_last_pause = current_time - self._last_pause_time
+                    if time_since_last_pause < 0.3:
+                        _safe_print(f"⚠️ Aguarde {0.3 - time_since_last_pause:.1f}s antes de pausar novamente")
+                        return False
+
+                self._last_pause_time = current_time
+
+                self.is_paused = not self.is_paused
 
             if self.is_paused:
                 _safe_print("⏸️ Sistema de pesca pausado")
