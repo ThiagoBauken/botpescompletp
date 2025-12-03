@@ -114,7 +114,8 @@
   "maintenance_timeout": 1,
   "chest_side": "right",
   "macro_type": "padrão",
-  "chest_distance": 1200,
+  "chest_distance": 1250,
+  "chest_vertical_offset": 220,
   "auto_reload": true,
   "auto_focus": false,
   "feeding_system": {
