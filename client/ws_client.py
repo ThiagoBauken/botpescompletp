@@ -742,6 +742,12 @@ class WebSocketClient:
         elif data.get("type") == "pong":
             logger.debug("🏓 Pong recebido")
 
+        # ✅ NOVO: Configurações sincronizadas (servidor confirmou recebimento)
+        elif data.get("type") == "config_synced":
+            logger.info("✅ Servidor confirmou sincronização de configs")
+            _safe_print("✅ [SERVER] Configurações sincronizadas com sucesso")
+            # Configs já foram enviadas, apenas log de confirmação
+
         else:
             logger.warning(f"⚠️ Mensagem desconhecida do servidor: {data}")
 
