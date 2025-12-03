@@ -136,7 +136,8 @@ def validate_with_keymaster(license_key: str, hwid: str) -> dict:
                 return {
                     "valid": True,
                     "message": "License válida",
-                    "plan": data.get("plan", "basic")
+                    "plan": data.get("plan", "basic"),
+                    "expires_at": data.get("expires_at")  # ✅ Incluir data de expiração
                 }
             else:
                 logger.warning(f"❌ Keymaster: License inválida ou expirada")
@@ -244,7 +245,11 @@ class _WriteConnection:
         self.pool.write_lock.release()
 
 # Criar pool global
-db_pool = DatabasePool("fishing_bot.db", pool_size=20)
+# ✅ CORREÇÃO: Salvar banco em /app/data para persistência em Docker
+import os
+DB_PATH = os.path.join(os.path.dirname(__file__), "data", "fishing_bot.db")
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+db_pool = DatabasePool(DB_PATH, pool_size=20)
 
 def init_database():
     """
@@ -274,19 +279,176 @@ def init_database():
             )
         """)
 
-    logger.info("✅ Banco de dados inicializado (HWID bindings)")
+        # ✅ NOVA: Tabela de tentativas de reset (anti-brute-force + notificação)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS reset_attempts (
+                license_key TEXT PRIMARY KEY,
+                attempts INTEGER DEFAULT 0,
+                last_attempt TEXT,
+                last_hwid_tried TEXT,
+                blocked_until TEXT
+            )
+        """)
+
+        # ✅ NOVA: Tabela de logs de segurança (para painel admin)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS security_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+                event_type TEXT NOT NULL,
+                license_key TEXT,
+                hwid TEXT,
+                details TEXT,
+                severity TEXT
+            )
+        """)
+
+    logger.info("✅ Banco de dados inicializado (HWID bindings + security)")
 
 # Inicializar ao startar
 init_database()
 
 # ═══════════════════════════════════════════════════════
+# FUNÇÕES DE SEGURANÇA
+# ═══════════════════════════════════════════════════════
+
+def log_security_event(event_type: str, license_key: str, hwid: str, details: str, severity: str = "WARNING"):
+    """
+    📝 Registrar evento de segurança para painel admin
+
+    Args:
+        event_type: Tipo do evento (ex: "HWID_MISMATCH", "RESET_BLOCKED", etc)
+        license_key: License key envolvida
+        hwid: HWID tentado
+        details: Detalhes do evento
+        severity: INFO, WARNING, CRITICAL
+    """
+    try:
+        with db_pool.get_write_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO security_logs (event_type, license_key, hwid, details, severity)
+                VALUES (?, ?, ?, ?, ?)
+            """, (event_type, license_key[:10] + "...", hwid[:16] + "...", details, severity))
+
+        logger.warning(f"🔐 {severity}: {event_type} - {details}")
+    except Exception as e:
+        logger.error(f"Erro ao logar evento de segurança: {e}")
+
+def check_reset_attempts(license_key: str) -> tuple[bool, str]:
+    """
+    🚫 Verificar se license key está bloqueada por tentativas excessivas
+
+    Returns:
+        (bloqueado, mensagem)
+    """
+    try:
+        with db_pool.get_read_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT attempts, last_attempt, blocked_until
+                FROM reset_attempts
+                WHERE license_key = ?
+            """, (license_key,))
+
+            result = cursor.fetchone()
+
+            if not result:
+                return (False, "")  # Primeira tentativa
+
+            attempts, last_attempt, blocked_until = result
+
+            # Verificar se está bloqueado
+            if blocked_until:
+                from datetime import datetime
+                blocked_until_dt = datetime.fromisoformat(blocked_until)
+                now = datetime.now()
+
+                if now < blocked_until_dt:
+                    remaining = int((blocked_until_dt - now).total_seconds() / 60)
+                    return (True, f"Bloqueado por tentativas excessivas. Aguarde {remaining} minutos.")
+
+            # Verificar se passou 1 hora desde última tentativa (resetar contador)
+            if last_attempt:
+                from datetime import datetime, timedelta
+                last_dt = datetime.fromisoformat(last_attempt)
+                if datetime.now() - last_dt > timedelta(hours=1):
+                    # Resetar contador
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE reset_attempts
+                        SET attempts = 0, blocked_until = NULL
+                        WHERE license_key = ?
+                    """, (license_key,))
+                    return (False, "")
+
+            # Verificar se atingiu limite (3 tentativas)
+            if attempts >= 3:
+                return (True, "Limite de tentativas atingido. Aguarde 1 hora ou contate o admin.")
+
+            return (False, "")
+
+    except Exception as e:
+        logger.error(f"Erro ao verificar tentativas: {e}")
+        return (False, "")
+
+def increment_reset_attempts(license_key: str, hwid: str):
+    """
+    ➕ Incrementar contador de tentativas de reset
+
+    Bloqueia por 1 hora após 3 tentativas
+    """
+    try:
+        from datetime import datetime, timedelta
+
+        with db_pool.get_write_connection() as conn:
+            cursor = conn.cursor()
+
+            # Verificar se já existe
+            cursor.execute("SELECT attempts FROM reset_attempts WHERE license_key = ?", (license_key,))
+            result = cursor.fetchone()
+
+            if result:
+                new_attempts = result[0] + 1
+
+                # Bloquear se atingiu 3 tentativas
+                blocked_until = None
+                if new_attempts >= 3:
+                    blocked_until = (datetime.now() + timedelta(hours=1)).isoformat()
+                    log_security_event(
+                        "RESET_BLOCKED",
+                        license_key,
+                        hwid,
+                        f"Bloqueado por {new_attempts} tentativas de reset com HWID incorreto",
+                        "CRITICAL"
+                    )
+
+                cursor.execute("""
+                    UPDATE reset_attempts
+                    SET attempts = ?, last_attempt = ?, last_hwid_tried = ?, blocked_until = ?
+                    WHERE license_key = ?
+                """, (new_attempts, datetime.now().isoformat(), hwid, blocked_until, license_key))
+            else:
+                # Primeira tentativa
+                cursor.execute("""
+                    INSERT INTO reset_attempts (license_key, attempts, last_attempt, last_hwid_tried)
+                    VALUES (?, 1, ?, ?)
+                """, (license_key, datetime.now().isoformat(), hwid))
+
+        logger.info(f"🔢 Reset attempts incrementado para {license_key[:10]}...")
+    except Exception as e:
+        logger.error(f"Erro ao incrementar tentativas: {e}")
+
+# ═══════════════════════════════════════════════════════
 # SESSÕES ATIVAS (em memória)
 # ═══════════════════════════════════════════════════════
 
-active_sessions: Dict[str, dict] = {}
+active_sessions: Dict[str, dict] = {}  # WebSocket connections (tempo real)
+active_http_logins: Dict[str, dict] = {}  # ✅ NOVO: HTTP logins recentes (últimas 24h)
 
 # ✅ CORREÇÃO #5: Thread-safety para active_sessions (100+ usuários simultâneos)
 sessions_lock = asyncio.Lock()
+http_logins_lock = asyncio.Lock()  # ✅ NOVO: Lock para HTTP logins
 
 # Regras de configuração (retornadas para o cliente)
 DEFAULT_RULES = {
@@ -295,6 +457,27 @@ DEFAULT_RULES = {
     "break_interval_fish": 50,     # Pausar a cada 50 peixes
     "break_duration_minutes": 45   # Duração do break
 }
+
+def clean_old_http_logins():
+    """Remove logins HTTP inativos (mais de 24 horas)"""
+    try:
+        now = datetime.now()
+        expired_keys = []
+
+        for key, session in active_http_logins.items():
+            last_seen = session.get("last_seen")
+            if last_seen:
+                time_diff = (now - last_seen).total_seconds()
+                if time_diff > 86400:  # 24 horas
+                    expired_keys.append(key)
+
+        for key in expired_keys:
+            login = active_http_logins[key].get("login", "unknown")
+            del active_http_logins[key]
+            logger.info(f"🧹 Removido login HTTP expirado: {login}")
+
+    except Exception as e:
+        logger.error(f"Erro ao limpar logins HTTP: {e}")
 
 class FishingSession:
     """
@@ -765,6 +948,15 @@ class ActivationResponse(BaseModel):
     message: str
     token: str = None
     rules: dict = None
+    # ✅ CORREÇÃO: Adicionar dados do usuário para o cliente exibir
+    login: str = None
+    license_key: str = None
+    hwid: str = None
+    pc_name: str = None
+    plan: str = None
+    expires_at: str = None
+    fish_count: int = 0
+    rank: str = None
 
 # ═══════════════════════════════════════════════════════
 # ROTAS HTTP
@@ -773,11 +965,26 @@ class ActivationResponse(BaseModel):
 @app.get("/")
 async def root():
     """Health check"""
+    # ✅ Limpar logins HTTP antigos antes de contar
+    clean_old_http_logins()
+
+    # ✅ Contar usuários únicos (HTTP + WebSocket)
+    # Usar license_key como identificador único
+    all_active_keys = set()
+    all_active_keys.update(active_sessions.keys())  # WebSocket
+    all_active_keys.update(active_http_logins.keys())  # HTTP
+
+    total_active = len(all_active_keys)
+    ws_active = len(active_sessions)
+    http_active = len(active_http_logins)
+
     return {
         "service": "Fishing Bot Server",
         "version": "2.0.0",
         "status": "online",
-        "active_users": len(active_sessions),
+        "active_users": total_active,  # ✅ Total único
+        "active_websockets": ws_active,  # WebSocket em tempo real
+        "active_http_sessions": http_active,  # Logins HTTP recentes
         "keymaster_integration": True
     }
 
@@ -806,9 +1013,11 @@ async def activate_license(request: ActivationRequest):
 
         if not keymaster_result["valid"]:
             logger.warning(f"❌ Keymaster rejeitou: {request.license_key[:10]}...")
-            return ActivationResponse(
-                success=False,
-                message=keymaster_result["message"]
+            # ✅ CORREÇÃO: Retornar HTTP 401 (Unauthorized) ao invés de 200 com success=False
+            # Isso garante que o cliente entenda que a autenticação falhou
+            raise HTTPException(
+                status_code=401,
+                detail=keymaster_result["message"]
             )
 
         logger.info(f"✅ Keymaster validou: {request.license_key[:10]}... (Plan: {keymaster_result.get('plan', 'N/A')})")
@@ -843,6 +1052,32 @@ async def activate_license(request: ActivationRequest):
                     logger.warning(f"   HWID: {request.hwid[:16]}...")
                     logger.warning(f"   PC: {request.pc_name or 'N/A'}")
 
+                    # ✅ VALIDAÇÃO: Verificar se o novo login já existe (antes de remover binding antigo)
+                    if bound_login != request.login:
+                        # Usuário está mudando de login junto com license key
+                        cursor.execute("""
+                            SELECT license_key, pc_name
+                            FROM hwid_bindings
+                            WHERE login=? AND license_key!=?
+                        """, (request.login, request.license_key))
+
+                        login_conflict = cursor.fetchone()
+
+                        if login_conflict:
+                            # ❌ Login já existe!
+                            conflicting_license = login_conflict[0]
+                            conflicting_pc = login_conflict[1]
+
+                            logger.error(f"🚨 TENTATIVA DE USAR LOGIN JÁ EXISTENTE AO TROCAR LICENSE!")
+                            logger.error(f"   Login antigo: {bound_login}")
+                            logger.error(f"   Login tentado: {request.login}")
+                            logger.error(f"   Já usado por license: {conflicting_license[:10]}... (PC: {conflicting_pc})")
+
+                            raise HTTPException(
+                                status_code=409,
+                                detail=f"❌ Login '{request.login}' já está sendo usado! Escolha outro nome."
+                            )
+
                     # Remover binding antigo
                     cursor.execute("""
                         DELETE FROM hwid_bindings
@@ -862,6 +1097,32 @@ async def activate_license(request: ActivationRequest):
                     # ✅ MESMO PC, MESMA LICENSE KEY - apenas atualizar timestamp
                     logger.info(f"✅ HWID válido: {request.login} (PC: {request.pc_name or 'N/A'})")
 
+                    # ✅ VALIDAÇÃO: Se mudou de login, verificar se o novo já existe
+                    if bound_login and bound_login != request.login:
+                        # Usuário está tentando mudar de login
+                        cursor.execute("""
+                            SELECT license_key, pc_name
+                            FROM hwid_bindings
+                            WHERE login=? AND license_key!=?
+                        """, (request.login, request.license_key))
+
+                        login_conflict = cursor.fetchone()
+
+                        if login_conflict:
+                            # ❌ Novo login já existe!
+                            conflicting_license = login_conflict[0]
+                            conflicting_pc = login_conflict[1]
+
+                            logger.error(f"🚨 TENTATIVA DE TROCAR PARA LOGIN JÁ EXISTENTE!")
+                            logger.error(f"   Login antigo: {bound_login}")
+                            logger.error(f"   Login tentado: {request.login}")
+                            logger.error(f"   Já usado por license: {conflicting_license[:10]}... (PC: {conflicting_pc})")
+
+                            raise HTTPException(
+                                status_code=409,
+                                detail=f"❌ Login '{request.login}' já está sendo usado! Escolha outro nome."
+                            )
+
                     cursor.execute("""
                         UPDATE hwid_bindings
                         SET last_seen=?, pc_name=?, login=?, email=?, password=?
@@ -870,6 +1131,37 @@ async def activate_license(request: ActivationRequest):
 
             else:
                 # NÃO TEM HWID VINCULADO → VINCULAR AGORA (primeiro uso)
+
+                # ✅ VALIDAÇÃO: Verificar se login já existe com OUTRA license_key
+                cursor.execute("""
+                    SELECT license_key, hwid, pc_name
+                    FROM hwid_bindings
+                    WHERE login=? AND license_key!=?
+                """, (request.login, request.license_key))
+
+                login_conflict = cursor.fetchone()
+
+                if login_conflict:
+                    # ❌ Login já está sendo usado por outra pessoa!
+                    conflicting_license = login_conflict[0]
+                    conflicting_hwid = login_conflict[1]
+                    conflicting_pc = login_conflict[2]
+
+                    logger.error(f"🚨 TENTATIVA DE USAR LOGIN JÁ EXISTENTE!")
+                    logger.error(f"   Login tentado: {request.login}")
+                    logger.error(f"   Sua license: {request.license_key[:10]}...")
+                    logger.error(f"   Seu PC: {request.pc_name}")
+                    logger.error(f"   Login já usado por:")
+                    logger.error(f"     - License: {conflicting_license[:10]}...")
+                    logger.error(f"     - PC: {conflicting_pc}")
+                    logger.error(f"     - HWID: {conflicting_hwid[:16]}...")
+
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"❌ Login '{request.login}' já está sendo usado por outra pessoa! Escolha outro nome de usuário."
+                    )
+
+                # ✅ Login disponível - pode inserir
                 cursor.execute("""
                     INSERT INTO hwid_bindings (license_key, hwid, pc_name, login, email, password)
                     VALUES (?, ?, ?, ?, ?, ?)
@@ -889,11 +1181,32 @@ async def activate_license(request: ActivationRequest):
 
         logger.info(f"✅ Ativação bem-sucedida: {request.login}")
 
+        # ✅ NOVO: Registrar login HTTP como sessão ativa
+        async with http_logins_lock:
+            active_http_logins[request.license_key] = {
+                "login": request.login,
+                "pc_name": request.pc_name,
+                "hwid": request.hwid,
+                "last_seen": datetime.now(),
+                "login_type": "http"  # Diferencia de WebSocket
+            }
+
+        logger.info(f"📊 Usuário adicionado a sessões HTTP: {request.login}")
+
+        # ✅ CORREÇÃO: Incluir dados do usuário na resposta
         return ActivationResponse(
             success=True,
             message="Ativação bem-sucedida!",
             token=token,
-            rules=DEFAULT_RULES
+            rules=DEFAULT_RULES,
+            login=request.login,
+            license_key=request.license_key,
+            hwid=request.hwid,
+            pc_name=request.pc_name,
+            plan=keymaster_result.get("plan", "basic"),
+            expires_at=keymaster_result.get("expires_at"),
+            fish_count=0,  # TODO: Buscar do banco se tiver stats
+            rank="Iniciante"  # TODO: Calcular rank real
         )
 
     except Exception as e:
@@ -940,6 +1253,13 @@ async def user_reset_password(request: dict):
             )
 
         # ══════════════════════════════════════════════════════
+        # 🛡️ PROTEÇÃO: Verificar tentativas excessivas
+        # ══════════════════════════════════════════════════════
+        bloqueado, msg_bloqueio = check_reset_attempts(license_key)
+        if bloqueado:
+            raise HTTPException(status_code=429, detail=msg_bloqueio)
+
+        # ══════════════════════════════════════════════════════
         # 1. VALIDAR LICENSE KEY COM KEYMASTER
         # ══════════════════════════════════════════════════════
         keymaster_result = validate_with_keymaster(license_key, hwid)
@@ -974,13 +1294,29 @@ async def user_reset_password(request: dict):
 
         # Verificar se HWID bate
         if bound_hwid != hwid:
-            logger.warning(f"⚠️ Reset senha - HWID não corresponde!")
+            # 🚨 NOTIFICAÇÃO AO ADMIN: Tentativa de reset em PC diferente
+            logger.warning(f"🚨 TENTATIVA DE RESET EM PC DIFERENTE!")
             logger.warning(f"   License: {license_key[:10]}...")
+            logger.warning(f"   Login: {old_login}")
+            logger.warning(f"   PC original: {pc_name or 'N/A'}")
             logger.warning(f"   HWID esperado: {bound_hwid[:16]}...")
             logger.warning(f"   HWID recebido: {hwid[:16]}...")
+
+            # 📝 Logar evento de segurança para painel admin
+            log_security_event(
+                "HWID_MISMATCH_RESET",
+                license_key,
+                hwid,
+                f"Tentativa de reset de senha com HWID incorreto. Login: {old_login}, PC: {pc_name or 'N/A'}",
+                "WARNING"
+            )
+
+            # 🔢 Incrementar contador de tentativas
+            increment_reset_attempts(license_key, hwid)
+
             raise HTTPException(
                 status_code=403,
-                detail="HWID não corresponde! Este não é o PC vinculado à license key."
+                detail="HWID não corresponde! Este não é o PC vinculado à license key. Contate o admin."
             )
 
         # ══════════════════════════════════════════════════════
@@ -1775,7 +2111,8 @@ async def get_all_users(
     with db_pool.get_read_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT login, pc_name, license_key, bound_at, last_seen, hwid, email, password
+            SELECT login, pc_name, license_key, bound_at, last_seen, hwid, email, password,
+                   total_fish, month_fish, last_fish_date
             FROM hwid_bindings
             ORDER BY last_seen DESC
         """)
@@ -1792,6 +2129,9 @@ async def get_all_users(
             "hwid": user[5],
             "email": user[6] or "N/A",
             "password": user[7] or "N/A",
+            "total_fish": user[8] or 0,  # ✅ NOVO: Peixes totais
+            "month_fish": user[9] or 0,  # ✅ NOVO: Peixes do mês
+            "last_fish_date": user[10],  # ✅ NOVO: Última pescaria
             "is_active": user[2] in active_sessions
         }
         for idx, user in enumerate(users)
@@ -1837,6 +2177,58 @@ async def delete_user(
         raise
     except Exception as e:
         logger.error(f"Erro ao deletar usuário: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin/api/user/{license_key}")
+async def get_user_details(
+    license_key: str,
+    admin_password: str = Header(None, alias="admin_password"),
+    password: str = None  # Query param alternativo
+):
+    """Obter detalhes de um usuário específico (requer senha admin)"""
+    # ✅ Aceitar senha de header OU query param
+    senha_recebida = admin_password or password
+
+    if senha_recebida != ADMIN_PASSWORD:
+        logger.error(f"❌ GET user details - Senha incorreta")
+        raise HTTPException(status_code=401, detail="Senha de admin inválida")
+
+    try:
+        with db_pool.get_read_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT login, pc_name, license_key, bound_at, last_seen,
+                       hwid, email, password, total_fish, month_fish, last_fish_date
+                FROM hwid_bindings
+                WHERE license_key = ?
+            """, (license_key,))
+            user = cursor.fetchone()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+        user_data = {
+            "login": user[0],
+            "pc_name": user[1],
+            "license_key": user[2],
+            "created_at": user[3],
+            "last_seen": user[4],
+            "hwid": user[5],
+            "email": user[6] or "N/A",
+            "password": user[7] or "N/A",
+            "total_fish": user[8] or 0,
+            "month_fish": user[9] or 0,
+            "last_fish_date": user[10] or "N/A",
+            "is_active": license_key in active_sessions
+        }
+
+        logger.info(f"📊 Admin consultou detalhes do usuário: {user[0]}")
+        return {"success": True, "user": user_data}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao buscar usuário: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/api/reset-password")
@@ -1929,17 +2321,96 @@ async def get_admin_stats(
         if "session" in session_data:
             total_fish += session_data["session"].fish_count
 
+    # ✅ Limpar logins HTTP antigos antes de contar
+    clean_old_http_logins()
+
+    # ✅ Contar usuários únicos (HTTP + WebSocket)
+    all_active_keys = set()
+    all_active_keys.update(active_sessions.keys())  # WebSocket
+    all_active_keys.update(active_http_logins.keys())  # HTTP
+
+    total_active = len(all_active_keys)
+    ws_active = len(active_sessions)
+    http_active = len(active_http_logins)
+
     return {
         "success": True,
         "stats": {
             "total_users": total_users,
-            "active_users": len(active_sessions),  # ✅ CORRIGIDO: active_users ao invés de active_connections
+            "active_users": total_active,  # ✅ Total único (HTTP + WebSocket)
+            "active_websockets": ws_active,  # Apenas WebSocket
+            "active_http_sessions": http_active,  # Apenas HTTP
             "total_fish": total_fish,
             "month_fish": month_fish,
             "server_version": "2.0.0",
             "keymaster_url": KEYMASTER_URL
         }
     }
+
+@app.get("/admin/api/security-logs")
+async def get_security_logs(
+    admin_password: str = Header(None, alias="admin_password"),
+    password: str = None,  # Query param alternativo
+    limit: int = 100,  # Limite de logs (padrão: 100 mais recentes)
+    severity: str = None  # Filtro opcional por severity (INFO, WARNING, CRITICAL)
+):
+    """
+    🛡️ Visualizar logs de segurança (requer senha admin)
+
+    Mostra tentativas de reset com HWID incorreto, bloqueios, etc.
+    """
+    # ✅ Aceitar senha de header OU query param
+    senha_recebida = admin_password or password
+
+    if senha_recebida != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Senha de admin inválida")
+
+    try:
+        with db_pool.get_read_connection() as conn:
+            cursor = conn.cursor()
+
+            # Query base
+            query = """
+                SELECT id, timestamp, event_type, license_key, hwid, details, severity
+                FROM security_logs
+            """
+
+            params = []
+
+            # Filtro por severity (opcional)
+            if severity:
+                query += " WHERE severity = ?"
+                params.append(severity)
+
+            # Ordenar por mais recentes
+            query += " ORDER BY id DESC LIMIT ?"
+            params.append(limit)
+
+            cursor.execute(query, params)
+            logs = cursor.fetchall()
+
+        logs_list = [
+            {
+                "id": log[0],
+                "timestamp": log[1],
+                "event_type": log[2],
+                "license_key": log[3],
+                "hwid": log[4],
+                "details": log[5],
+                "severity": log[6]
+            }
+            for log in logs
+        ]
+
+        return {
+            "success": True,
+            "total": len(logs_list),
+            "logs": logs_list
+        }
+
+    except Exception as e:
+        logger.error(f"Erro ao buscar logs de segurança: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ═══════════════════════════════════════════════════════
 # EXECUTAR SERVIDOR

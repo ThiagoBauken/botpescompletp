@@ -1138,7 +1138,7 @@ class AuthDialog:
         """
         self.validating = True
         self.status_label.config(
-            text=f"🔄 {'Criando conta' if mode == 'register' else 'Autenticando'}...",
+            text=f"🔄 Fase 1/2: Ativando chave no Keymaster...",
             fg='#ffcc00'
         )
         self.root.update()
@@ -1152,13 +1152,120 @@ class AuthDialog:
                 hwid = self.license_manager.get_hardware_id()
                 pc_name = platform.node()
 
-                # 2. Preparar payload
-                # ✅ PRODUÇÃO: Servidor de autenticação
-                server_url = os.getenv('AUTH_SERVER_URL', 'https://private-serverpesca.pbzgje.easypanel.host')
+                # ═══════════════════════════════════════════════════════
+                # FASE 1: ATIVAR NO KEYMASTER PRIMEIRO
+                # ═══════════════════════════════════════════════════════
+                print(f"[AUTH] FASE 1: Ativando license key no Keymaster...")
 
-                # ✅ CORREÇÃO: Servidor Python usa APENAS /auth/activate para ambos os modos
-                # Não existe mais /auth/login nem /auth/register
+                keymaster_url = os.getenv('KEYMASTER_URL', 'https://private-keygen.pbzgje.easypanel.host')
+                project_id = os.getenv('PROJECT_ID', '67a4a76a-d71b-4d07-9ba8-f7e794ce0578')
+
+                keymaster_payload = {
+                    'activation_key': license_key,
+                    'hardware_id': hwid,
+                    'project_id': project_id
+                }
+
+                print(f"[KEYMASTER] URL: {keymaster_url}/activate")
+                print(f"[KEYMASTER] License: {license_key[:10]}...")
+                print(f"[KEYMASTER] HWID: {hwid[:16]}...")
+
+                try:
+                    keymaster_response = requests.post(
+                        f"{keymaster_url}/activate",
+                        json=keymaster_payload,
+                        timeout=15
+                    )
+
+                    print(f"[KEYMASTER] Status: {keymaster_response.status_code}")
+
+                    if keymaster_response.status_code == 200:
+                        keymaster_data = keymaster_response.json()
+                        if keymaster_data.get('valid', False):
+                            print(f"[KEYMASTER] ✅ Chave ativada com sucesso!")
+                            print(f"[KEYMASTER] Expira em: {keymaster_data.get('expires_at', 'N/A')}")
+                        else:
+                            # Keymaster retornou 200 mas valid=false
+                            error_msg = keymaster_data.get('message', 'Keymaster rejeitou a chave')
+                            print(f"[KEYMASTER] ❌ {error_msg}")
+                            self.root.after(0, lambda: self.handle_auth_error(f"Keymaster: {error_msg}"))
+                            return
+                    elif keymaster_response.status_code == 400:
+                        # Bad request - chave inválida, expirada, ou já ativada em outro PC
+                        error_data = keymaster_response.json()
+                        error_msg = error_data.get('message', 'Erro ao ativar chave')
+                        print(f"[KEYMASTER] ⚠️ Ativação falhou: {error_msg}")
+
+                        # ✅ FALLBACK: Tentar validar como alternativa
+                        print(f"[KEYMASTER] 🔄 Tentando validar chave como fallback...")
+
+                        try:
+                            validate_response = requests.post(
+                                f"{keymaster_url}/validate",
+                                json=keymaster_payload,
+                                timeout=15
+                            )
+
+                            print(f"[KEYMASTER] Validate Status: {validate_response.status_code}")
+
+                            if validate_response.status_code == 200:
+                                validate_data = validate_response.json()
+                                if validate_data.get('valid', False):
+                                    print(f"[KEYMASTER] ✅ Chave validada com sucesso!")
+                                    print(f"[KEYMASTER] Expira em: {validate_data.get('expires_at', 'N/A')}")
+                                    # Continua para FASE 2
+                                else:
+                                    # Validação também falhou
+                                    validate_msg = validate_data.get('message', 'Chave inválida')
+                                    print(f"[KEYMASTER] ❌ Validação falhou: {validate_msg}")
+                                    self.root.after(0, lambda: self.handle_auth_error(f"Keymaster: {validate_msg}"))
+                                    return
+                            else:
+                                # Validação retornou erro HTTP
+                                print(f"[KEYMASTER] ❌ Validação retornou erro HTTP {validate_response.status_code}")
+                                self.root.after(0, lambda: self.handle_auth_error(f"Keymaster: {error_msg}"))
+                                return
+
+                        except requests.exceptions.Timeout:
+                            print(f"[KEYMASTER] ❌ Timeout ao validar")
+                            self.root.after(0, lambda: self.handle_auth_error(f"Keymaster: {error_msg}"))
+                            return
+                        except requests.exceptions.ConnectionError:
+                            print(f"[KEYMASTER] ❌ Erro de conexão ao validar")
+                            self.root.after(0, lambda: self.handle_auth_error(f"Keymaster: {error_msg}"))
+                            return
+                        except Exception as validate_error:
+                            print(f"[KEYMASTER] ❌ Erro ao validar: {validate_error}")
+                            self.root.after(0, lambda: self.handle_auth_error(f"Keymaster: {error_msg}"))
+                            return
+                    else:
+                        print(f"[KEYMASTER] ❌ Erro HTTP {keymaster_response.status_code}")
+                        self.root.after(0, lambda: self.handle_auth_error(f"Erro no Keymaster (HTTP {keymaster_response.status_code})"))
+                        return
+
+                except requests.exceptions.Timeout:
+                    print(f"[KEYMASTER] ❌ Timeout ao conectar")
+                    self.root.after(0, lambda: self.handle_auth_error("Timeout ao conectar com Keymaster"))
+                    return
+                except requests.exceptions.ConnectionError:
+                    print(f"[KEYMASTER] ❌ Erro de conexão")
+                    self.root.after(0, lambda: self.handle_auth_error("Não foi possível conectar ao Keymaster"))
+                    return
+
+                # ═══════════════════════════════════════════════════════
+                # FASE 2: AUTENTICAR NO SERVIDOR DE PESCA (chave já ativada)
+                # ═══════════════════════════════════════════════════════
+                print(f"\n[AUTH] FASE 2: Autenticando no Servidor de Pesca...")
+
+                # Atualizar UI
+                self.root.after(0, lambda: self.status_label.config(
+                    text="🔄 Fase 2/2: Conectando ao servidor de pesca...",
+                    fg='#ffcc00'
+                ))
+
+                server_url = os.getenv('AUTH_SERVER_URL', 'https://private-serverpesca.pbzgje.easypanel.host')
                 endpoint = f"{server_url}/auth/activate"
+
                 payload = {
                     'login': username,  # servidor espera 'login', não 'username'
                     'email': email if mode == 'register' else '',
@@ -1168,24 +1275,45 @@ class AuthDialog:
                     'pc_name': pc_name
                 }
 
-                # 3. Fazer requisição
-                print(f"[AUTH] Enviando para: {endpoint}")
+                print(f"[SERVER] URL: {endpoint}")
+                print(f"[SERVER] Login: {username}")
                 response = requests.post(endpoint, json=payload, timeout=15)
 
+                # ✅ CORREÇÃO: Verificar status HTTP E campo 'success' da resposta
                 if response.status_code == 200:
                     data = response.json()
 
-                    # Sucesso!
-                    self.root.after(0, lambda: self.handle_auth_success(
-                        username=username,
-                        password=password,
-                        license_key=license_key,
-                        remember=remember,
-                        token=data.get('token'),
-                        user_data=data
-                    ))
+                    # ✅ CRÍTICO: Verificar se servidor realmente autorizou
+                    # FastAPI pode retornar 200 com success=False no corpo
+                    if data.get('success', False):
+                        # ✅ Sucesso real!
+                        self.root.after(0, lambda: self.handle_auth_success(
+                            username=username,
+                            password=password,
+                            license_key=license_key,
+                            remember=remember,
+                            token=data.get('token'),
+                            user_data=data
+                        ))
+                    else:
+                        # ❌ HTTP 200 mas success=False (erro de validação)
+                        error_msg = data.get('message', 'Autenticação rejeitada pelo servidor')
+                        print(f"[AUTH] Servidor rejeitou: {error_msg}")
+                        self.root.after(0, lambda: self.handle_auth_error(error_msg))
+
+                elif response.status_code == 401:
+                    # ❌ Não autorizado (chave inválida, expirada, não ativada, etc.)
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get('detail') or error_data.get('message', 'Chave de licença inválida')
+                    except:
+                        error_msg = 'Chave de licença inválida ou não ativada'
+
+                    print(f"[AUTH] HTTP 401: {error_msg}")
+                    self.root.after(0, lambda: self.handle_auth_error(error_msg))
+
                 else:
-                    # Erro
+                    # ❌ Outros erros HTTP
                     try:
                         error_data = response.json()
                         # ✅ FastAPI usa 'detail', mas aceitar 'message' também
@@ -1193,6 +1321,7 @@ class AuthDialog:
                     except:
                         error_msg = f'Erro HTTP {response.status_code}'
 
+                    print(f"[AUTH] Erro HTTP {response.status_code}: {error_msg}")
                     self.root.after(0, lambda: self.handle_auth_error(error_msg))
 
             except requests.exceptions.ConnectionError:
@@ -1238,7 +1367,8 @@ class AuthDialog:
             'remember': remember,
             'pc_name': platform.node(),
             'authenticated': True,
-            'user_data': user_data
+            'user_data': user_data,
+            'language': i18n.current_language if I18N_AVAILABLE else 'pt'  # ✅ Idioma escolhido
         }
 
         # Fechar após 1 segundo

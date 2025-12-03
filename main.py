@@ -141,7 +141,12 @@ def main():
 
                     # Atualizar credentials.dat com a nova chave
                     license_key = license_key_from_file
-                    cred_manager.save_credentials(login, password, license_key)
+                    # ✅ CORREÇÃO: Usar argumentos nomeados para evitar troca de campos
+                    cred_manager.save_credentials(
+                        username=login,
+                        password=password,
+                        license_key=license_key
+                    )
                     safe_print("   ✅ Credenciais sincronizadas!")
 
             else:
@@ -153,12 +158,23 @@ def main():
                 auth_dialog = AuthDialog(license_manager, cred_manager)
                 auth_result = auth_dialog.show()
 
+                # ✅ CORREÇÃO: Verificar se autenticação foi bem-sucedida
                 if not auth_result:
-                    safe_print("❌ Autenticação cancelada")
-                    # ✅ CORREÇÃO: Remover input() que trava .exe sem console
-                    # input("Pressione Enter para sair...")
+                    safe_print("❌ Autenticação cancelada pelo usuário")
                     import time
-                    time.sleep(3)  # Delay para usuário ver mensagem
+                    time.sleep(3)
+                    return 1
+
+                # ✅ CRÍTICO: Verificar se servidor autorizou (campo 'authenticated')
+                if not auth_result.get('authenticated', False):
+                    safe_print("❌ Autenticação rejeitada pelo servidor")
+                    safe_print("   Motivo: Chave de licença inválida, expirada ou não ativada")
+                    safe_print("\n💡 Verifique:")
+                    safe_print("   1. Sua license key está ativada no sistema?")
+                    safe_print("   2. A chave está vinculada ao seu Hardware ID?")
+                    safe_print("   3. A licença não está expirada?")
+                    import time
+                    time.sleep(5)
                     return 1
 
                 # Extrair credenciais
@@ -170,7 +186,12 @@ def main():
                 # Salvar credenciais se solicitado
                 if remember:
                     safe_print("   💾 Salvando credenciais...")
-                    cred_manager.save_credentials(login, password, license_key)
+                    # ✅ CORREÇÃO: Usar argumentos nomeados para evitar troca de campos
+                    cred_manager.save_credentials(
+                        username=login,
+                        password=password,
+                        license_key=license_key
+                    )
 
                 safe_print("✅ Autenticação completa!")
 

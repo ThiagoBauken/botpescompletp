@@ -1,40 +1,37 @@
 @echo off
-chcp 65001 >nul 2>&1
 cls
 echo ========================================
-echo   🎣 FISHING MAGEBOT v5.0 - NUITKA BUILD
+echo   FISHING MAGEBOT v5.0.6 - NUITKA BUILD
 echo ========================================
 echo.
-echo 🚀 Compilando com Nuitka (código nativo C)
-echo ⚡ Muito mais rápido que PyInstaller!
+echo Compilando com Nuitka (codigo nativo C)
+echo Muito mais rapido que PyInstaller!
 echo.
 
-REM Verificar se Nuitka está instalado
-echo [1/6] 📦 Verificando Nuitka...
+REM Verificar se Nuitka esta instalado
+echo [1/8] Verificando Nuitka...
 pip show nuitka >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ⚠️  Nuitka não encontrado. Instalando...
-    pip install nuitka
-    pip install ordered-set
+    echo Nuitka nao encontrado. Instalando...
+    pip install nuitka ordered-set
 ) else (
-    echo ✅ Nuitka já instalado!
+    echo OK - Nuitka ja instalado!
 )
 echo.
 
 REM Verificar compilador C (MSVC ou MinGW)
-echo [2/6] 🔧 Verificando compilador C...
+echo [2/8] Verificando compilador C...
 where cl.exe >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ⚠️  MSVC não encontrado. Tentando MinGW...
+    echo MSVC nao encontrado. Tentando MinGW...
     where gcc.exe >nul 2>&1
     if %errorlevel% neq 0 (
         echo.
-        echo ❌ ERRO: Nenhum compilador C encontrado!
+        echo ERRO: Nenhum compilador C encontrado!
         echo.
-        echo 📋 SOLUÇÕES:
+        echo SOLUCOES:
         echo 1. Instale Visual Studio Build Tools
         echo    https://visualstudio.microsoft.com/downloads/
-        echo    ^(Selecione "Build Tools for Visual Studio"^)
         echo.
         echo 2. OU instale MinGW-w64
         echo    https://www.mingw-w64.org/
@@ -42,48 +39,56 @@ if %errorlevel% neq 0 (
         pause
         exit /b 1
     ) else (
-        echo ✅ MinGW encontrado!
+        echo OK - MinGW encontrado!
         set COMPILER=--mingw64
     )
 ) else (
-    echo ✅ MSVC encontrado!
+    echo OK - MSVC encontrado!
     set COMPILER=--msvc=latest
 )
 echo.
 
+REM Limpar cache Python primeiro (CRITICO para evitar erros!)
+echo [3/8] Limpando cache Python (__pycache__, .pyc)...
+if exist "__pycache__" rmdir /S /Q "__pycache__"
+if exist "ui\__pycache__" rmdir /S /Q "ui\__pycache__"
+if exist "utils\__pycache__" rmdir /S /Q "utils\__pycache__"
+if exist "core\__pycache__" rmdir /S /Q "core\__pycache__"
+if exist "client\__pycache__" rmdir /S /Q "client\__pycache__"
+if exist "server_auth\__pycache__" rmdir /S /Q "server_auth\__pycache__"
+del /s /q *.pyc 2>nul
+echo OK - Cache Python limpo!
+echo.
+
 REM Limpar builds anteriores
-echo [3/6] 🧹 Limpando builds anteriores...
+echo [4/8] Limpando builds anteriores...
 if exist FishingMageBOT.build rmdir /S /Q FishingMageBOT.build
 if exist FishingMageBOT.dist rmdir /S /Q FishingMageBOT.dist
 if exist FishingMageBOT.exe del /Q FishingMageBOT.exe
 if exist dist\FishingMageBOT rmdir /S /Q dist\FishingMageBOT
-echo ✅ Limpeza concluída!
+echo OK - Limpeza concluida!
 echo.
 
-echo [4/6] ⚙️  Compilando com Nuitka...
-echo ⏳ Primeira compilação pode levar 10-15 minutos...
-echo    (compilações seguintes serão muito mais rápidas)
+echo [5/8] Compilando com Nuitka...
+echo Primeira compilacao pode levar 10-15 minutos...
+echo (compilacoes seguintes serao muito mais rapidas)
 echo.
 
 nuitka ^
     --onefile ^
-    --windows-disable-console ^
+    --standalone ^
+    --windows-console-mode=disable ^
     --windows-icon-from-ico=magoicon.ico ^
     --company-name="FishingMageBOT" ^
     --product-name="FishingMageBOT v5.0" ^
-    --file-version=5.0.0.0 ^
-    --product-version=5.0.0.0 ^
-    --file-description="Ultimate Fishing Bot - Protected Edition" ^
+    --file-version=5.0.6.0 ^
+    --product-version=5.0.6.0 ^
+    --file-description="Ultimate Fishing Bot - Protected Edition with Keymaster Auth" ^
     --copyright="Copyright 2025" ^
     --enable-plugin=tk-inter ^
     --include-data-dir=templates=templates ^
     --include-data-dir=locales=locales ^
-    --include-data-dir=config=config ^
-    --include-data-dir=client=client ^
-    --include-data-dir=ui=ui ^
-    --include-data-dir=core=core ^
-    --include-data-dir=utils=utils ^
-    --include-data-file=templates/motion.gif=templates/motion.gif ^
+    --include-data-file=config/default_config.json=config/default_config.json ^
     --include-data-file=magoicon.ico=magoicon.ico ^
     --include-package=PIL ^
     --include-package=cv2 ^
@@ -97,12 +102,16 @@ nuitka ^
     --include-package=requests ^
     --include-package=cryptography ^
     --include-package=certifi ^
+    --include-package=psutil ^
+    --include-package=win32gui ^
+    --include-package=dotenv ^
     --follow-imports ^
     --nofollow-import-to=matplotlib ^
     --nofollow-import-to=pandas ^
     --nofollow-import-to=scipy ^
     --nofollow-import-to=IPython ^
     --lto=yes ^
+    --jobs=4 ^
     --output-filename=FishingMageBOT.exe ^
     %COMPILER% ^
     --assume-yes-for-downloads ^
@@ -112,128 +121,132 @@ nuitka ^
 
 if %errorlevel% neq 0 (
     echo.
-    echo ❌ ERRO: Compilação Nuitka falhou!
+    echo ERRO: Compilacao Nuitka falhou!
     pause
     exit /b 1
 )
 
 echo.
-echo [5/6] 📂 Organizando arquivos...
+echo [6/8] Organizando arquivos...
 
-REM Criar pasta de distribuição
+REM Criar pasta de distribuicao
 if not exist dist\FishingMageBOT mkdir dist\FishingMageBOT
 
-REM Mover executável
+REM Mover executavel
 move FishingMageBOT.exe dist\FishingMageBOT\ >nul
 
-REM Copiar pastas necessárias
+REM Copiar pastas necessarias
 echo Copiando templates...
 xcopy /E /I /Y templates dist\FishingMageBOT\templates\ >nul
-echo Copiando traduções...
+echo Copiando traducoes...
 xcopy /E /I /Y locales dist\FishingMageBOT\locales\ >nul
-echo Copiando configurações...
-xcopy /E /I /Y config dist\FishingMageBOT\config\ >nul
 
-REM Criar pasta data
+REM Criar pasta config e copiar APENAS default_config.json
+echo Copiando configuracoes padrao...
+if not exist dist\FishingMageBOT\config mkdir dist\FishingMageBOT\config
+copy /Y config\default_config.json dist\FishingMageBOT\config\ >nul
+
+REM Copiar .env.example para configuracao opcional
+if exist .env.example (
+    echo Copiando .env.example...
+    copy /Y .env.example dist\FishingMageBOT\ >nul
+)
+
+REM Criar pasta data (para configuracoes do usuario)
 if not exist dist\FishingMageBOT\data mkdir dist\FishingMageBOT\data
+echo Pasta data/ criada (para configuracoes do usuario)
 
-echo ✅ Arquivos organizados (GIF incluído em templates/)!
+echo OK - Arquivos organizados!
 echo.
 
-echo [6/6] 📝 Criando README...
+echo [7/8] Criando README...
 (
 echo ========================================
-echo  🎣 FISHING MAGEBOT v5.0 - NUITKA BUILD
+echo  FISHING MAGEBOT v5.0.6 - NUITKA BUILD
 echo ========================================
 echo.
-echo ⚡ COMPILADO COM NUITKA ^(CÓDIGO NATIVO C^)
-echo    Muito mais rápido que versões Python!
+echo COMPILADO COM NUITKA
+echo Muito mais rapido que versoes Python!
 echo.
-echo 🚀 COMO USAR:
-echo 1. Execute "FishingMageBOT.exe"
-echo 2. Configure as opções nas abas
-echo 3. Pressione F9 para iniciar o bot
+echo NOVIDADES v5.0.6:
+echo - Autenticacao em 2 fases (Keymaster + Servidor)
+echo - Fallback automatico: /activate -^> /validate
+echo - Correcao de campos trocados
+echo - Sincronizacao de idiomas
+echo - Sistema de seguranca AES-256
 echo.
-echo ⚙️  REQUISITOS:
-echo - Windows 10/11 ^(64-bit^)
-echo - Arduino Leonardo conectado
-echo - Licença válida
+echo COMO USAR:
+echo 1. Execute FishingMageBOT.exe
+echo 2. Faca login ou cadastro com sua license key
+echo 3. Configure nas abas e pressione F9
 echo.
-echo ⌨️  HOTKEYS PRINCIPAIS:
+echo HOTKEYS PRINCIPAIS:
 echo F9  - Iniciar bot
 echo F1  - Pausar/Continuar
 echo F2  - Parar bot
-echo ESC - Parada de emergência
-echo F4  - Mostrar/Ocultar interface
+echo ESC - Parada de emergencia
+echo F4  - Ocultar/Mostrar UI
 echo.
-echo 📁 ESTRUTURA DE PASTAS:
-echo - templates/      Imagens para detecção
-echo - locales/        Traduções ^(PT/EN/RU/ES^)
-echo - config/         Configurações padrão
-echo - data/           Seus dados e configurações
+echo ESTRUTURA DE PASTAS:
+echo - templates/      Imagens para deteccao
+echo - locales/        Traducoes (PT/EN/ES/RU/ZH)
+echo - config/         Configuracoes padrao
+echo - data/           Seus dados e configuracoes
 echo.
-echo 🌍 IDIOMAS DISPONÍVEIS:
-echo - Português ^(PT^)
-echo - English ^(EN^)
-echo - Русский ^(RU^)
-echo - Español ^(ES^)
+echo CONFIGURACAO AVANCADA (Opcional):
+echo - Copie .env.example para .env
+echo - Edite .env para configurar URLs customizadas:
+echo   * KEYMASTER_URL (servidor de licencas)
+echo   * AUTH_SERVER_URL (servidor de usuarios)
+echo   * PROJECT_ID (ID do projeto)
 echo.
-echo ⚡ VANTAGENS DA VERSÃO NUITKA:
-echo ✅ 3-5x mais rápido que PyInstaller
-echo ✅ Detecção de templates mais rápida
-echo ✅ Menor uso de memória RAM
-echo ✅ Startup mais rápido
-echo ✅ Código otimizado nativamente
+echo VANTAGENS DA VERSAO NUITKA:
+echo - 3-5x mais rapido que PyInstaller
+echo - Deteccao de templates mais rapida
+echo - Codigo nativo C otimizado
+echo - Autenticacao em 2 fases segura
 echo.
-echo ⚠️  IMPORTANTE:
-echo - NÃO delete as pastas templates, locales, config, client e ui
-echo - Seus dados ficam salvos na pasta data/
-echo - Logs são criados automaticamente em data/logs/
-echo - Screenshots acumulam em data/screenshots/ e fishing_bot_v4/screenshots/
-echo - Use LIMPAR_SCREENSHOTS.bat para limpar screenshots antigos
+echo IMPORTANTE:
+echo - NAO delete as pastas templates e locales
+echo - Seus dados ficam salvos em %%APPDATA%%\FishingMageBOT\
+echo - License keys sao validadas online
 echo.
-echo 💬 SUPORTE:
-echo Discord: [Seu Discord]
-echo GitHub: [Seu GitHub]
-echo ========================================
+echo SUPORTE:
+echo - Discord: [LINK DO DISCORD]
+echo - Site: [LINK DO SITE]
+echo.
 ) > dist\FishingMageBOT\README.txt
 
-echo ✅ README criado!
+echo OK - README criado!
 echo.
 
-REM Limpar arquivos temporários de build
-echo 🧹 Limpando arquivos temporários...
+REM Limpar arquivos temporarios de build
+echo [8/8] Limpando arquivos temporarios...
 if exist FishingMageBOT.build rmdir /S /Q FishingMageBOT.build
 if exist FishingMageBOT.dist rmdir /S /Q FishingMageBOT.dist
 echo.
 
 echo ========================================
-echo   ✅ BUILD NUITKA CONCLUÍDO COM SUCESSO!
+echo BUILD NUITKA CONCLUIDO COM SUCESSO!
 echo ========================================
 echo.
-echo 📦 Pacote pronto em: dist\FishingMageBOT\
+echo Pacote pronto em: dist\FishingMageBOT
 echo.
-echo 📊 TAMANHO DO EXECUTÁVEL:
-for %%A in (dist\FishingMageBOT\FishingMageBOT.exe) do echo    %%~zA bytes ^(~%%~zA KB^)
+for %%A in (dist\FishingMageBOT\FishingMageBOT.exe) do echo TAMANHO: %%~zA bytes
 echo.
-echo 📁 ESTRUTURA DO PACOTE:
-echo   FishingMageBOT\
-echo   ├── ⚡ FishingMageBOT.exe    ^(EXECUTÁVEL NATIVO C^)
-echo   ├── 📂 templates\             ^(Detecção de imagens^)
-echo   ├── 🌍 locales\               ^(4 idiomas^)
-echo   ├── ⚙️  config\                ^(Configurações^)
-echo   ├── 💾 data\                  ^(Dados do usuário^)
-echo   └── 📝 README.txt             ^(Instruções^)
+echo ARQUIVOS INCLUIDOS:
+dir /B dist\FishingMageBOT
 echo.
-echo ⚡ VANTAGENS NUITKA vs PyInstaller:
-echo    ✅ 3-5x mais rápido
-echo    ✅ Menor tamanho do .exe ^(arquivo único^)
-echo    ✅ Sem pasta _internal
-echo    ✅ Código nativo C otimizado
+echo COMO DISTRIBUIR:
+echo 1. Comprima a pasta FishingMageBOT em ZIP
+echo 2. Envie o arquivo ZIP para os usuarios
+echo 3. Usuarios extraem e executam FishingMageBOT.exe
+echo 4. Usuarios precisam de license key valida
 echo.
-echo 💡 COMO DISTRIBUIR:
-echo    1. Comprima a pasta "FishingMageBOT" em ZIP
-echo    2. Envie o arquivo ZIP para os usuários
-echo    3. Usuários extraem e executam FishingMageBOT.exe
+echo PROXIMOS PASSOS:
+echo 1. Teste o executavel: dist\FishingMageBOT\FishingMageBOT.exe
+echo 2. Verifique login/cadastro funciona
+echo 3. Teste todas as funcoes principais
+echo 4. Crie backup antes de distribuir!
 echo.
 pause
