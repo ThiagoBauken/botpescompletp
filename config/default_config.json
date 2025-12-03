@@ -1,7 +1,7 @@
 {
   "language": "en",
   "template_confidence": {
-    "catch": 0.92,
+    "catch": 0.75,
     "enbausi": 0.79,
     "inventory": 0.9,
     "carneurso": 0.75,
@@ -56,10 +56,12 @@
     "semiscavaraescura": 0.8
   },
   "timeouts": {
-    "maintenance_timeout": 1
+    "maintenance_timeout": 1,
+    "fishing_cycle_timeout": 121
   },
   "auto_clean": {
-    "interval": 2,
+    "interval": 10,
+    "enabled": true,
     "chest_method": "padrão",
     "include_baits": true,
     "mode": "auto_interval"
@@ -100,9 +102,6 @@
     "test_cleaning": "f5",
     "test_maintenance": "page down"
   },
-  "server": {
-    "url": "wss://private-serverpesca.pbzgje.easypanel.host/ws"
-  },
   "console_log_level": "QUIET",
   "use_arduino": true,
   "arduino_port": "auto",
@@ -111,7 +110,7 @@
     "x": 959,
     "y": 539
   },
-  "cycle_timeout": 10,
+  "cycle_timeout": 122,
   "maintenance_timeout": 1,
   "chest_side": "right",
   "macro_type": "padrão",
@@ -122,11 +121,11 @@
     "enabled": true,
     "auto_detect": true,
     "trigger_mode": "catches",
-    "trigger_catches": 10,
+    "trigger_catches": 15,
     "trigger_time": 20,
     "session_count": 3,
     "max_uses_per_slot": 20,
-    "feeds_per_session": 2
+    "feeds_per_session": 3
   },
   "viewer": {
     "fps": 5,
@@ -135,6 +134,11 @@
     "antialiasing": true,
     "show_slots": true
   },
+  "rod_system": {
+    "two_rod_mode": false,
+    "max_rod_uses": 20,
+    "reload_rod_uses": 10
+  },
   "bait_system": {
     "priority": {
       "crocodilo": 1,
@@ -142,8 +146,9 @@
       "carneurso": 3,
       "carnedelobo": 4,
       "TROUTT": 5,
-      "grub": 6,
-      "minhoca": 7
+      "yellowperch": 6,
+      "grub": 7,
+      "minhoca": 8
     },
     "enabled": {
       "crocodilo": true,
@@ -151,6 +156,7 @@
       "carneurso": true,
       "carnedelobo": true,
       "TROUTT": true,
+      "yellowperch": true,
       "grub": true,
       "minhoca": true
     }
